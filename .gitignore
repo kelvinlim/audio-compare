@@ -1,0 +1,12 @@
+node_modules
+dist
+.DS_Store
+*.log
+
+# Rust / Tauri
+src-tauri/target
+src-tauri/gen
+
+# Encode cache if someone runs the app from the repo
+.cache
+desktop

@@ -1,0 +1,58 @@
+[
+  {
+    "id": "goldberg-aria",
+    "title": "Bach — Goldberg Aria",
+    "file": "goldberg-aria.flac",
+    "genre": "Solo piano",
+    "license": "CC0 · Kimiko Ishizaka, 2012, 24-bit/96 kHz"
+  },
+  {
+    "id": "goldberg-variatio-1",
+    "title": "Bach — Goldberg Variatio 1",
+    "file": "goldberg-variatio-1.flac",
+    "genre": "Solo piano",
+    "license": "CC0 · Kimiko Ishizaka, 2012, 24-bit/96 kHz"
+  },
+  {
+    "id": "beethoven-op18-6-i",
+    "title": "Beethoven — Quartet Op. 18/6, I",
+    "file": "beethoven-op18-6-i.flac",
+    "genre": "String quartet",
+    "license": "Public domain · Musopen String Quartet, 2012"
+  },
+  {
+    "id": "njhb-checking-for-traps",
+    "title": "NJHB — Checking For Traps",
+    "file": "njhb-checking-for-traps.flac",
+    "genre": "Jazz combo",
+    "license": "CC BY 4.0 · Larry Heyl / NJHB, 2019 (first 2:30)"
+  },
+  {
+    "id": "jahzzar-missing-you",
+    "title": "Jahzzar — Missing You",
+    "file": "jahzzar-missing-you.flac",
+    "genre": "Indie pop",
+    "license": "CC BY-SA · Jahzzar, Kuddelmuddel, 2015"
+  },
+  {
+    "id": "transients",
+    "title": "Transients",
+    "file": "transients.flac",
+    "genre": "Percussive",
+    "license": "CC0 (generated)"
+  },
+  {
+    "id": "harmonics",
+    "title": "Harmonic study",
+    "file": "harmonics.flac",
+    "genre": "Classical-like",
+    "license": "CC0 (generated)"
+  },
+  {
+    "id": "dense-mix",
+    "title": "Dense mix",
+    "file": "dense-mix.flac",
+    "genre": "Layered",
+    "license": "CC0 (generated)"
+  }
+]
