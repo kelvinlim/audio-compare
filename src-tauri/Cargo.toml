@@ -2,7 +2,7 @@
 name = "audio-compare"
 version = "0.1.0"
 description = "Open A/B and blind ABX listening tests for lossless vs lossy audio"
-authors = ["you"]
+authors = ["Kelvin O. Lim"]
 edition = "2021"
 
 [lib]

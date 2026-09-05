@@ -1,40 +1,46 @@
 # Audio Compare
 
-Desktop A/B and blind ABX listening tests: start from a lossless track, encode it locally, and switch instantly between the original and a compressed version.
+Desktop app for hearing what lossy compression does to a lossless source.
 
-v1 compares **FLAC/WAV** against **MP3 (LAME)** at 320 / 192 / 128 kbps and **Opus** at 128 / 96 / 64 kbps. Both sides are decoded to the same PCM format before playback so you are hearing codec artifacts, not player or container differences.
+Start from FLAC or WAV, encode it locally, then switch instantly between the original and the encode. Use **open A/B** when you want labels, or **blind ABX** when you want a score.
+
+Built with [Tauri 2](https://tauri.app/), React, and Rust. Playback is raw PCM through [cpal](https://github.com/RustAudio/cpal). Encoding and decoding go through **ffmpeg** on your machine (LAME MP3 and Opus).
+
+## Features
+
+- **Open A/B** — A is lossless, B is the encode. Toggle freely.
+- **Blind ABX** — X is randomly A or B each trial. Vote whether X is A or B. After N trials you get *k* correct of *N* and a one-sided binomial p-value vs chance.
+- **Matched playback** — both sides decode to the same PCM format at the output device rate, so you are comparing codecs, not players or containers.
+- **Instant A / B / X** — same playhead, no restart.
+- **Output device picker** — including system default.
+- **Bundled open-licensed tracks** plus import of your own FLAC/WAV.
+- **Encode cache** — a given source + codec + bitrate is encoded once.
+
+### Codecs
+
+| Codec | Bitrates (kbps) |
+| --- | --- |
+| MP3 (LAME) | 320, 192, 128, 64, 32 |
+| Opus | 128, 96, 64, 32 |
+
+ffmpeg is not bundled (license and size). The app looks on `PATH`, then common install locations.
 
 ## Requirements
 
 - Node.js 20+
 - Rust (stable)
-- **ffmpeg** with `libmp3lame` and `libopus`
-
-The app does not bundle ffmpeg (license and size). It looks on `PATH`, then common install locations.
-
-### Install ffmpeg
-
-**macOS (Homebrew)**
+- ffmpeg with `libmp3lame` and `libopus`
 
 ```bash
+# macOS
 brew install ffmpeg
-```
 
-**Windows (Chocolatey)**
-
-```bash
+# Windows
 choco install ffmpeg
-```
 
-**Debian / Ubuntu**
-
-```bash
+# Debian / Ubuntu
 sudo apt install ffmpeg
-```
 
-Confirm the encoders exist:
-
-```bash
 ffmpeg -hide_banner -encoders | grep -E 'libmp3lame|libopus'
 ```
 
@@ -51,39 +57,38 @@ Release build:
 npm run tauri build
 ```
 
-## How a session works
+The library is read from `assets/tracks/manifest.json` at startup. After adding tracks, relaunch the app.
 
-1. Pick a bundled diagnostic track or import your own FLAC/WAV.
+The setup screen defaults to **Jahzzar — Missing You** vs **32 kbps MP3** in **Open A/B**. That pair makes codec damage easy to hear; step the bitrate up once you can tell A from B.
+
+## Using a session
+
+1. Pick a bundled track or import FLAC/WAV. First listen: Missing You, lossless vs 32 kbps MP3.
 2. Choose codec, bitrate, and **Open A/B** or **Blind ABX**.
-3. Both files decode to PCM at the output device sample rate. Switching A/B/X keeps the same playhead.
+3. Play. Switch with the pads or the keyboard. The playhead stays put.
 
-**Open A/B** — A is lossless, B is the encode. Toggle freely.
+| Key | Action |
+| --- | --- |
+| `A` `B` `X` | Switch source (`X` in blind mode only) |
+| Space | Play / pause |
+| `1` / `2` | Vote X is A or B (blind) |
+| ← → | Seek |
 
-**Blind ABX** — A and B are the two files. X is randomly A or B. Say whether X is A or B. After N trials the app shows *k* correct of *N* and a one-sided binomial p-value against chance.
-
-Keyboard: `A` `B` `X` switch, Space play/pause, `1`/`2` vote, arrows seek.
-
-## Cache and history
-
-Encoded files are cached under the OS app-data directory, keyed by source hash + codec + bitrate. They are not re-encoded on every listen.
-
-- macOS: `~/Library/Application Support/com.kolim.audiocompare/`
-- Windows: `%APPDATA%\com.kolim.audiocompare\`
-- Linux: `~/.local/share/com.kolim.audiocompare/`
-
-`history.json` stores completed sessions. `library.json` remembers imported paths (the audio files themselves stay where you left them).
+In blind mode the UI does not reveal whether X is A or B. A sounding like X on some trials is expected.
 
 ## Bundled tracks
 
-`assets/tracks/` includes:
+All recordings in `assets/tracks/` are open-licensed. Full attribution is in [`assets/tracks/LICENSE`](assets/tracks/LICENSE).
 
-- **Bach, Goldberg Aria and Variatio 1** — Kimiko Ishizaka, Open Goldberg Variations, 24-bit/96 kHz, **CC0**
-- **Beethoven, Op. 18 No. 6, I** — Musopen String Quartet, 24-bit/48 kHz, **public domain** (2012 Kickstarter)
-- **NJHB, Checking For Traps** (2:30 excerpt) — jazz combo, **CC BY 4.0**
-- **Jahzzar, Missing You** — indie/synth pop, **CC BY-SA**
-- Short generated diagnostics (transients, harmonic study, dense mix) for isolating pre-echo and smearing
+| Track | Notes | License |
+| --- | --- | --- |
+| Bach, Goldberg Aria and Variatio 1 — Kimiko Ishizaka | Open Goldberg Variations, 24-bit / 96 kHz | CC0 |
+| Beethoven, Op. 18 No. 6, I — Musopen String Quartet | 24-bit / 48 kHz | Public domain |
+| NJHB, Checking For Traps (2:30 excerpt) | Jazz combo, 16-bit / 44.1 kHz | CC BY 4.0 |
+| Jahzzar, Missing You | Indie / synth pop, 24-bit / 44.1 kHz | CC BY-SA |
+| Transients, harmonics, dense mix | Generated diagnostics for pre-echo and smearing | CC0 |
 
-See `assets/tracks/LICENSE` for sources. Import your own FLAC/WAV for anything else.
+Import your own FLAC/WAV for anything else.
 
 Regenerate only the synthetic diagnostics:
 
@@ -91,6 +96,26 @@ Regenerate only the synthetic diagnostics:
 python3 scripts/generate_tracks.py
 ```
 
-## Out of v1
+## Local data
 
-Threshold / staircase detection, exclusive (bit-perfect) output, AAC, mobile, and web.
+Encoded files are cached under the OS app-data directory, keyed by source hash + codec + bitrate.
+
+| Platform | Path |
+| --- | --- |
+| macOS | `~/Library/Application Support/com.kolim.audiocompare/` |
+| Windows | `%APPDATA%\com.kolim.audiocompare\` |
+| Linux | `~/.local/share/com.kolim.audiocompare/` |
+
+`history.json` stores completed sessions. `library.json` remembers imported paths; the audio files stay where you left them.
+
+## Status
+
+v0.1, desktop (macOS, Windows, Linux).
+
+Not in this version: staircase / threshold detection, exclusive (bit-perfect) output, AAC, mobile, or web.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
+
+Bundled recordings keep their own licenses (CC0, public domain, CC BY, CC BY-SA). See [`assets/tracks/LICENSE`](assets/tracks/LICENSE).

@@ -37,9 +37,13 @@ function codecLabel(codecs: CodecOption[], id: string): string {
 }
 
 const FALLBACK_CODECS: CodecOption[] = [
-  { id: "mp3", label: "MP3 (LAME)", bitrates: [320, 192, 128] },
-  { id: "opus", label: "Opus", bitrates: [128, 96, 64] },
+  { id: "mp3", label: "MP3 (LAME)", bitrates: [320, 192, 128, 64, 32] },
+  { id: "opus", label: "Opus", bitrates: [128, 96, 64, 32] },
 ];
+
+const DEFAULT_TRACK_ID = "bundled:jahzzar-missing-you";
+const DEFAULT_CODEC = "mp3";
+const DEFAULT_BITRATE = 32;
 
 const FALLBACK_DEVICE: DeviceInfo = {
   name: "System default",
@@ -63,10 +67,10 @@ export default function App() {
   const [devices, setDevices] = useState<DeviceInfo[]>([]);
   const [deviceName, setDeviceName] = useState<string>("");
   const [codecs, setCodecs] = useState<CodecOption[]>([]);
-  const [trackId, setTrackId] = useState<string>("");
-  const [codec, setCodec] = useState("mp3");
-  const [bitrate, setBitrate] = useState(192);
-  const [mode, setMode] = useState<SessionMode>("blind");
+  const [trackId, setTrackId] = useState(DEFAULT_TRACK_ID);
+  const [codec, setCodec] = useState(DEFAULT_CODEC);
+  const [bitrate, setBitrate] = useState(DEFAULT_BITRATE);
+  const [mode, setMode] = useState<SessionMode>("open");
   const [trialCount, setTrialCount] = useState(8);
   const [session, setSession] = useState<Session | null>(null);
   const [player, setPlayer] = useState<PlayerStatus | null>(null);
@@ -91,7 +95,12 @@ export default function App() {
       if (current && [...lib.bundled, ...lib.user].some((t) => t.id === current)) {
         return current;
       }
-      return lib.bundled[0]?.id ?? lib.user[0]?.id ?? "";
+      return (
+        lib.bundled.find((track) => track.id === DEFAULT_TRACK_ID)?.id ??
+        lib.bundled[0]?.id ??
+        lib.user[0]?.id ??
+        ""
+      );
     });
   }, []);
 
@@ -501,6 +510,10 @@ function Setup({
         Both the original and the encode are decoded to the same PCM stream, then
         switched at the same playhead. You are hearing codec artifacts, not player
         differences.
+      </p>
+      <p className="hint">
+        Suggested first listen: Jahzzar — Missing You, lossless vs 32 kbps MP3. The
+        difference should be obvious; then try a higher bitrate or another track.
       </p>
 
       <div className="field">
