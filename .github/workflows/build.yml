@@ -96,7 +96,7 @@ jobs:
       # Same secrets as kelvinlim/qualsched. GitHub does not let us copy values
       # between repos; add them on this repo before the next signed macOS build.
       - name: Write App Store Connect API key
-        if: matrix.os == 'macos-latest' && secrets.APPLE_API_KEY_CONTENT != ''
+        if: matrix.os == 'macos-latest'
         env:
           APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
         run: |
@@ -137,7 +137,7 @@ jobs:
 
       # Tauri notarizes the .app; Gatekeeper still checks the DMG wrapper.
       - name: Notarize and staple DMG
-        if: matrix.os == 'macos-latest' && secrets.APPLE_API_KEY_CONTENT != ''
+        if: matrix.os == 'macos-latest'
         env:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
