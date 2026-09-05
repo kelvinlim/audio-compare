@@ -11,9 +11,55 @@ pub struct FfmpegStatus {
     pub version: Option<String>,
     pub has_lame: bool,
     pub has_opus: bool,
+    pub bundled: bool,
 }
 
-pub fn find_ffmpeg() -> Option<PathBuf> {
+fn sidecar_filename() -> Option<&'static str> {
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    {
+        return Some("ffmpeg-aarch64-apple-darwin");
+    }
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    {
+        return Some("ffmpeg-x86_64-unknown-linux-gnu");
+    }
+    #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
+    {
+        return Some("ffmpeg-x86_64-pc-windows-msvc.exe");
+    }
+    #[cfg(not(any(
+        all(target_os = "macos", target_arch = "aarch64"),
+        all(target_os = "linux", target_arch = "x86_64"),
+        all(target_os = "windows", target_arch = "x86_64")
+    )))]
+    {
+        None
+    }
+}
+
+fn bundled_name() -> &'static str {
+    if cfg!(windows) {
+        "ffmpeg.exe"
+    } else {
+        "ffmpeg"
+    }
+}
+
+fn sidecar_next_to_exe() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let path = exe.parent()?.join(bundled_name());
+    path.is_file().then_some(path)
+}
+
+fn sidecar_in_crate_binaries() -> Option<PathBuf> {
+    let name = sidecar_filename()?;
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("binaries")
+        .join(name);
+    path.is_file().then_some(path)
+}
+
+fn system_ffmpeg() -> Option<PathBuf> {
     if let Ok(path) = which::which("ffmpeg") {
         return Some(path);
     }
@@ -29,6 +75,19 @@ pub fn find_ffmpeg() -> Option<PathBuf> {
         .find(|path| path.is_file())
 }
 
+pub fn find_ffmpeg() -> Option<PathBuf> {
+    sidecar_next_to_exe()
+        .or_else(sidecar_in_crate_binaries)
+        .or_else(system_ffmpeg)
+}
+
+pub fn ffmpeg_is_bundled(path: &Path) -> bool {
+    sidecar_next_to_exe()
+        .into_iter()
+        .chain(sidecar_in_crate_binaries())
+        .any(|sidecar| sidecar == path)
+}
+
 pub fn probe_status() -> FfmpegStatus {
     let Some(path) = find_ffmpeg() else {
         return FfmpegStatus {
@@ -37,8 +96,10 @@ pub fn probe_status() -> FfmpegStatus {
             version: None,
             has_lame: false,
             has_opus: false,
+            bundled: false,
         };
     };
+    let bundled = ffmpeg_is_bundled(&path);
 
     let version = Command::new(&path)
         .arg("-version")
@@ -64,6 +125,7 @@ pub fn probe_status() -> FfmpegStatus {
         version,
         has_lame: encoders.contains("libmp3lame"),
         has_opus: encoders.contains("libopus"),
+        bundled,
     }
 }
 

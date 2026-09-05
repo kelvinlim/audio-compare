@@ -55,7 +55,7 @@ pub fn list_codecs() -> Vec<CodecOption> {
         CodecOption {
             id: "mp3".into(),
             label: "MP3 (LAME)".into(),
-            bitrates: vec![320, 192, 128, 64, 32],
+            bitrates: vec![320, 192, 128, 96, 64, 32],
         },
         CodecOption {
             id: "opus".into(),

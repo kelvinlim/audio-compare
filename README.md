@@ -4,7 +4,7 @@ Desktop app for hearing what lossy compression does to a lossless source.
 
 Start from FLAC or WAV, encode it locally, then switch instantly between the original and the encode. Use **open A/B** when you want labels, or **blind ABX** when you want a score.
 
-Built with [Tauri 2](https://tauri.app/), React, and Rust. Playback is raw PCM through [cpal](https://github.com/RustAudio/cpal). Encoding and decoding go through **ffmpeg** on your machine (LAME MP3 and Opus).
+Built with [Tauri 2](https://tauri.app/), React, and Rust. Playback is raw PCM through [cpal](https://github.com/RustAudio/cpal). Encoding and decoding go through a **bundled ffmpeg** sidecar (LAME MP3 and Opus).
 
 ## Features
 
@@ -20,29 +20,17 @@ Built with [Tauri 2](https://tauri.app/), React, and Rust. Playback is raw PCM t
 
 | Codec | Bitrates (kbps) |
 | --- | --- |
-| MP3 (LAME) | 320, 192, 128, 64, 32 |
+| MP3 (LAME) | 320, 192, 128, 96, 64, 32 |
 | Opus | 128, 96, 64, 32 |
 
-ffmpeg is not bundled (license and size). The app looks on `PATH`, then common install locations.
+ffmpeg is bundled with the app (LAME MP3 and Opus). You do not need to install it separately.
 
 ## Requirements
 
 - Node.js 20+
 - Rust (stable)
-- ffmpeg with `libmp3lame` and `libopus`
 
-```bash
-# macOS
-brew install ffmpeg
-
-# Windows
-choco install ffmpeg
-
-# Debian / Ubuntu
-sudo apt install ffmpeg
-
-ffmpeg -hide_banner -encoders | grep -E 'libmp3lame|libopus'
-```
+A static ffmpeg sidecar is downloaded on first `tauri dev` / `tauri build` (or run `npm run prepare-ffmpeg`). The packaged app includes it.
 
 ## Run
 
@@ -110,7 +98,7 @@ Encoded files are cached under the OS app-data directory, keyed by source hash +
 
 ## Status
 
-v0.1, desktop (macOS, Windows, Linux).
+v0.2, desktop (macOS, Windows, Linux). ffmpeg is bundled.
 
 Not in this version: staircase / threshold detection, exclusive (bit-perfect) output, AAC, mobile, or web.
 
@@ -118,4 +106,4 @@ Not in this version: staircase / threshold detection, exclusive (bit-perfect) ou
 
 This project is licensed under the [MIT License](LICENSE).
 
-Bundled recordings keep their own licenses (CC0, public domain, CC BY, CC BY-SA). See [`assets/tracks/LICENSE`](assets/tracks/LICENSE).
+The packaged app includes an [FFmpeg](https://ffmpeg.org) sidecar. FFmpeg is a separate GPL-licensed program; see [`src-tauri/binaries/NOTICE`](src-tauri/binaries/NOTICE). Bundled recordings keep their own licenses (CC0, public domain, CC BY, CC BY-SA). See [`assets/tracks/LICENSE`](assets/tracks/LICENSE).

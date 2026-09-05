@@ -1,0 +1,12 @@
+FFmpeg is downloaded at build time into this directory and bundled with
+Audio Compare as a sidecar. The binaries are not stored in git.
+
+Source release: https://github.com/eugeneware/ffmpeg-static/releases/tag/b6.1.1
+Upstream FFmpeg: https://ffmpeg.org
+
+Those builds are GPL (they include GPL-licensed encoders such as x264 in
+some packages, and LAME/Opus for this app). Audio Compare itself remains
+MIT-licensed; FFmpeg is a separate program invoked as a child process.
+
+The corresponding license text is written to FFMPEG-LICENSE when
+`npm run prepare-ffmpeg` runs.

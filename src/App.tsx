@@ -37,7 +37,7 @@ function codecLabel(codecs: CodecOption[], id: string): string {
 }
 
 const FALLBACK_CODECS: CodecOption[] = [
-  { id: "mp3", label: "MP3 (LAME)", bitrates: [320, 192, 128, 64, 32] },
+  { id: "mp3", label: "MP3 (LAME)", bitrates: [320, 192, 128, 96, 64, 32] },
   { id: "opus", label: "Opus", bitrates: [128, 96, 64, 32] },
 ];
 
@@ -327,14 +327,15 @@ export default function App() {
 
       {ffmpeg && !ffmpeg.available && (
         <div className="banner warn">
-          ffmpeg was not found. Install it (for example <code>brew install ffmpeg</code>)
-          and restart the app. Encoding and decoding both depend on it.
+          The bundled ffmpeg sidecar is missing. Reinstall the app — encoding and
+          decoding both depend on it.
         </div>
       )}
       {ffmpeg?.available && (!ffmpeg.hasLame || !ffmpeg.hasOpus) && (
         <div className="banner warn">
           ffmpeg is missing {ffmpeg.hasLame ? "" : "libmp3lame "}
-          {ffmpeg.hasOpus ? "" : "libopus"}. Reinstall a full build so both encoders are present.
+          {ffmpeg.hasOpus ? "" : "libopus"}. Reinstall the app so the bundled
+          encoders are present.
         </div>
       )}
       {error && <div className="banner error">{error}</div>}

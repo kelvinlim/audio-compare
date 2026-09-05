@@ -10,3 +10,8 @@ src-tauri/gen
 # Encode cache if someone runs the app from the repo
 .cache
 desktop
+
+# Downloaded ffmpeg sidecars (see scripts/prepare-ffmpeg.mjs)
+src-tauri/binaries/ffmpeg-*
+src-tauri/binaries/*.exe
+src-tauri/binaries/FFMPEG-LICENSE

@@ -127,6 +127,8 @@ button {
   list-style: none;
   min-width: 280px;
   max-width: 460px;
+  max-height: min(420px, 70vh);
+  overflow-y: auto;
   background: var(--bg-raise);
   border: 1px solid var(--line);
   border-radius: 10px;

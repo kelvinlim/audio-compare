@@ -4,7 +4,7 @@ use serde::Serialize;
 pub enum AppError {
     #[error("{0}")]
     Message(String),
-    #[error("ffmpeg was not found on PATH")]
+    #[error("bundled ffmpeg is missing from this install")]
     FfmpegMissing,
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),

@@ -208,30 +208,37 @@ impl PlayerHandle {
 
 pub fn list_devices_infallible() -> Vec<DeviceInfo> {
     let host = cpal::default_host();
-    let default_device = host.default_output_device();
-    let default_name = default_device.as_ref().and_then(|device| device.name().ok());
-    let mut devices = Vec::new();
+    let default_name = host
+        .default_output_device()
+        .and_then(|device| device.name().ok());
+    let mut devices: Vec<DeviceInfo> = Vec::new();
 
-    if let Some(device) = default_device {
-        if let Some(info) = device_info(&device, true) {
+    // Walk every host device, not only output_devices(). On macOS, cpal 0.15
+    // dropped built-in speakers from that list whenever they were not the
+    // system default (Bluetooth / Zoom / HDMI had been selected instead).
+    let candidates = host
+        .devices()
+        .ok()
+        .map(|iter| iter.collect::<Vec<_>>())
+        .or_else(|| host.output_devices().ok().map(|iter| iter.collect()))
+        .unwrap_or_default();
+
+    for device in candidates {
+        if !device_can_play(&device) {
+            continue;
+        }
+        let Ok(name) = device.name() else {
+            continue;
+        };
+        if devices.iter().any(|item| item.name == name) {
+            continue;
+        }
+        if let Some(info) = device_info(&device, default_name.as_deref() == Some(name.as_str())) {
             devices.push(info);
         }
     }
 
-    if let Ok(outputs) = host.output_devices() {
-        for device in outputs {
-            let Ok(name) = device.name() else {
-                continue;
-            };
-            if devices.iter().any(|item| item.name == name) {
-                continue;
-            }
-            if let Some(info) = device_info(&device, default_name.as_deref() == Some(name.as_str()))
-            {
-                devices.push(info);
-            }
-        }
-    }
+    devices.sort_by(|a, b| b.is_default.cmp(&a.is_default).then(a.name.cmp(&b.name)));
 
     if devices.is_empty() {
         devices.push(DeviceInfo {
@@ -244,9 +251,25 @@ pub fn list_devices_infallible() -> Vec<DeviceInfo> {
     devices
 }
 
+fn device_can_play(device: &Device) -> bool {
+    if device.supports_output() || device.default_output_config().is_ok() {
+        return true;
+    }
+    // Built-in Mac speakers can still fail the output-config probe when they
+    // are not the system default. Keep anything that is not clearly capture-only.
+    #[cfg(target_os = "macos")]
+    {
+        !device.supports_input()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        false
+    }
+}
+
 fn device_info(device: &Device, is_default: bool) -> Option<DeviceInfo> {
     let name = device.name().ok()?;
-    let config = device.default_output_config().ok();
+    let config = output_config(device);
     Some(DeviceInfo {
         is_default,
         sample_rate: config.as_ref().map(|c| c.sample_rate().0).unwrap_or(48_000),
@@ -255,9 +278,19 @@ fn device_info(device: &Device, is_default: bool) -> Option<DeviceInfo> {
     })
 }
 
+fn output_config(device: &Device) -> Option<cpal::SupportedStreamConfig> {
+    device.default_output_config().ok().or_else(|| {
+        device
+            .supported_output_configs()
+            .ok()?
+            .next()
+            .map(|range| range.with_max_sample_rate())
+    })
+}
+
 pub fn device_sample_rate(preferred: Option<&str>) -> u32 {
     resolve_device(preferred)
-        .and_then(|device| device.default_output_config().ok())
+        .and_then(|device| output_config(&device))
         .map(|config| config.sample_rate().0)
         .unwrap_or(48_000)
 }
@@ -265,6 +298,13 @@ pub fn device_sample_rate(preferred: Option<&str>) -> u32 {
 fn resolve_device(preferred: Option<&str>) -> Option<Device> {
     let host = cpal::default_host();
     if let Some(name) = preferred {
+        if let Ok(devices) = host.devices() {
+            if let Some(found) = devices.into_iter().find(|device| {
+                device.name().ok().as_deref() == Some(name) && device_can_play(device)
+            }) {
+                return Some(found);
+            }
+        }
         if let Ok(mut devices) = host.output_devices() {
             if let Some(found) = devices.find(|device| device.name().ok().as_deref() == Some(name))
             {
@@ -297,7 +337,7 @@ fn audio_thread(rx: mpsc::Receiver<Command>, shared: Arc<Shared>) {
 
 fn build_stream(preferred: &Option<String>, shared: &Arc<Shared>) -> Option<cpal::Stream> {
     let device = resolve_device(preferred.as_deref())?;
-    let supported = device.default_output_config().ok()?;
+    let supported = output_config(&device)?;
     let config: StreamConfig = supported.clone().into();
     let format = supported.sample_format();
     let result = match format {

@@ -7,6 +7,7 @@ export interface FfmpegStatus {
   version: string | null;
   hasLame: boolean;
   hasOpus: boolean;
+  bundled: boolean;
 }
 
 export interface DeviceInfo {
