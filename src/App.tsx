@@ -1,6 +1,8 @@
 import { open } from "@tauri-apps/plugin-dialog";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import changelog from "../CHANGELOG.md?raw";
 import { api } from "./api";
 import type {
   CodecOption,
@@ -31,6 +33,19 @@ function formatP(p: number): string {
   }
   return `p = ${p.toFixed(3)}`;
 }
+
+function formatWhen(iso: string | null): string {
+  if (!iso) {
+    return "";
+  }
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return iso;
+  }
+  return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+const REPO_URL = "https://github.com/kelvinlim/audio-compare";
 
 function codecLabel(codecs: CodecOption[], id: string): string {
   return codecs.find((item) => item.id === id)?.label ?? id.toUpperCase();
@@ -78,6 +93,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<PrepareProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [aboutOpen, setAboutOpen] = useState(false);
 
   const tracks = useMemo(
     () => [...library.bundled, ...library.user],
@@ -88,6 +104,10 @@ export default function App() {
   const selectedCodec = codecOptions.find((item) => item.id === codec);
   const deviceOptions = devices.length > 0 ? devices : [FALLBACK_DEVICE];
   const inSession = session !== null;
+  const abxHistory = useMemo(
+    () => history.filter((item) => item.mode === "blind" && item.complete).slice(0, 12),
+    [history],
+  );
 
   const applyLibrary = useCallback((lib: Library) => {
     setLibrary(lib);
@@ -251,6 +271,14 @@ export default function App() {
     }
   }, [session?.mode]);
 
+  const cycleSource = useCallback(() => {
+    const order: Array<"a" | "b" | "x"> =
+      session?.mode === "blind" ? ["a", "b", "x"] : ["a", "b"];
+    const index = order.indexOf(listenSource);
+    const next = order[(index < 0 ? 0 : index + 1) % order.length];
+    void switchSource(next);
+  }, [listenSource, session?.mode, switchSource]);
+
   const togglePlay = useCallback(async () => {
     if (player?.playing) {
       await api.pause();
@@ -280,7 +308,7 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!inSession) {
+      if (!inSession || aboutOpen) {
         return;
       }
       const target = event.target as HTMLElement | null;
@@ -301,6 +329,9 @@ export default function App() {
         void submitVote("a");
       } else if (key === "2") {
         void submitVote("b");
+      } else if (key === "tab") {
+        event.preventDefault();
+        cycleSource();
       } else if (event.key === "ArrowLeft") {
         void api.seek(Math.max(0, (player?.positionSeconds ?? 0) - 5));
       } else if (event.key === "ArrowRight") {
@@ -309,14 +340,20 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [inSession, player?.positionSeconds, submitVote, switchSource, togglePlay]);
+  }, [aboutOpen, cycleSource, inSession, player?.positionSeconds, submitVote, switchSource, togglePlay]);
 
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand">
-          <span className="wordmark">Audio Compare</span>
-          <span className="badge">ABX</span>
+        <div className="brand-block">
+          <div className="brand">
+            <span className="wordmark">Audio Compare</span>
+            <span className="version">v{__APP_VERSION__}</span>
+            <span className="badge">ABX</span>
+          </div>
+          <button type="button" className="ghost" onClick={() => setAboutOpen((open) => !open)}>
+            {aboutOpen ? "Back" : "About"}
+          </button>
         </div>
         <DevicePicker
           devices={deviceOptions}
@@ -340,6 +377,9 @@ export default function App() {
       )}
       {error && <div className="banner error">{error}</div>}
 
+      {aboutOpen ? (
+        <About />
+      ) : (
       <div className="layout">
         <aside className="sidebar">
           <section>
@@ -367,16 +407,18 @@ export default function App() {
           </section>
           <section className="history">
             <h2>History</h2>
-            {history.length === 0 && <p className="hint">Completed blind sessions land here.</p>}
+            {abxHistory.length === 0 && (
+              <p className="hint">Completed ABX sessions land here.</p>
+            )}
             <ul>
-              {history.slice(0, 12).map((item) => (
+              {abxHistory.map((item) => (
                 <li key={item.id}>
                   <strong>{item.trackTitle}</strong>
+                  <span>{formatWhen(item.finishedAt ?? item.startedAt)}</span>
                   <span>
-                    {item.codec.toUpperCase()} {item.bitrate} ·{" "}
-                    {item.mode === "blind"
-                      ? `${item.correct}/${item.trialCount} · ${formatP(item.pValue)}`
-                      : "open A/B"}
+                    {item.correct} / {item.trialCount} correct
+                    {` · ${formatP(item.pValue)}`}
+                    {` · ${item.codec.toUpperCase()} ${item.bitrate}`}
                   </span>
                 </li>
               ))}
@@ -420,7 +462,33 @@ export default function App() {
           )}
         </main>
       </div>
+      )}
     </div>
+  );
+}
+
+function About() {
+  const openRepo = async () => {
+    try {
+      await openUrl(REPO_URL);
+    } catch {
+      window.open(REPO_URL, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  return (
+    <main className="main about">
+      <p className="eyebrow">Audio Compare v{__APP_VERSION__}</p>
+      <h1>About</h1>
+      <p>
+        Source, issues, and releases:{" "}
+        <button type="button" className="link" onClick={() => void openRepo()}>
+          {REPO_URL}
+        </button>
+      </p>
+      <h2>Changes</h2>
+      <pre className="changelog">{changelog.trim()}</pre>
+    </main>
   );
 }
 
@@ -763,7 +831,7 @@ function Player({
       </div>
 
       <p className="keys">
-        A / B{open ? "" : " / X"} switch · Space play · ← → seek
+        A / B{open ? "" : " / X"} switch · Tab cycle · Space play · ← → seek
         {open ? "" : " · 1 / 2 vote X is A or B"}
       </p>
 

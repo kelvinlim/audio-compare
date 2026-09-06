@@ -58,6 +58,7 @@ The setup screen defaults to **Jahzzar — Missing You** vs **32 kbps MP3** in *
 | Key | Action |
 | --- | --- |
 | `A` `B` `X` | Switch source (`X` in blind mode only) |
+| Tab | Cycle A/B (or A/B/X in blind) |
 | Space | Play / pause |
 | `1` / `2` | Vote X is A or B (blind) |
 | ← → | Seek |
@@ -98,7 +99,7 @@ Encoded files are cached under the OS app-data directory, keyed by source hash +
 
 ## Status
 
-v0.2.1, desktop (macOS, Windows, Linux). ffmpeg is bundled. macOS is Developer ID signed and notarized.
+v0.3.0, desktop (macOS, Windows, Linux). ffmpeg is bundled. macOS is Developer ID signed and notarized.
 
 Not in this version: staircase / threshold detection, exclusive (bit-perfect) output, AAC, mobile, or web.
 
