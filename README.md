@@ -23,7 +23,7 @@ Built with [Tauri 2](https://tauri.app/), React, and Rust. Playback is raw PCM t
 | MP3 (LAME) | 320, 192, 128, 96, 64, 32 |
 | Opus | 128, 96, 64, 32 |
 
-ffmpeg is bundled with the app (LAME MP3 and Opus). You do not need to install it separately.
+ffmpeg is bundled with the app as `audio-compare-ffmpeg` (LAME MP3 and Opus). You do not need a system ffmpeg, and the Linux packages will not overwrite `/usr/bin/ffmpeg`.
 
 ## Requirements
 
@@ -99,7 +99,7 @@ Encoded files are cached under the OS app-data directory, keyed by source hash +
 
 ## Status
 
-v0.3.0, desktop (macOS, Windows, Linux). ffmpeg is bundled. macOS is Developer ID signed and notarized.
+v0.3.1, desktop (macOS, Windows, Linux). ffmpeg is bundled. macOS is Developer ID signed and notarized.
 
 Not in this version: staircase / threshold detection, exclusive (bit-perfect) output, AAC, mobile, or web.
 

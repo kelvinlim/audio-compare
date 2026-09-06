@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1 — 2026-09-06
+
+- Install the bundled ffmpeg sidecar as `audio-compare-ffmpeg` so Linux `.deb`/`.rpm` packages do not overwrite `/usr/bin/ffmpeg`
+
 ## 0.3.0 — 2026-09-06
 
 - Tab cycles A/B in open mode and A/B/X in blind mode

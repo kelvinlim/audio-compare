@@ -85,9 +85,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            src-tauri/binaries/ffmpeg-*
+            src-tauri/binaries/audio-compare-ffmpeg-*
             src-tauri/binaries/FFMPEG-LICENSE
-          key: ffmpeg-b6.1.1-${{ matrix.rust_target }}
+          key: ffmpeg-b6.1.1-sidecar-${{ matrix.rust_target }}
 
       - name: Download bundled ffmpeg
         run: npm run prepare-ffmpeg

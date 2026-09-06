@@ -104,7 +104,7 @@ if (!spec) {
 }
 
 mkdirSync(destDir, { recursive: true });
-const dest = join(destDir, spec.exe ? `ffmpeg-${target}.exe` : `ffmpeg-${target}`);
+const dest = join(destDir, spec.exe ? `audio-compare-ffmpeg-${target}.exe` : `audio-compare-ffmpeg-${target}`);
 const licenseDest = join(destDir, "FFMPEG-LICENSE");
 
 if (existsSync(dest) && !force) {

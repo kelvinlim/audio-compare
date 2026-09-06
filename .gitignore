@@ -12,6 +12,7 @@ src-tauri/gen
 desktop
 
 # Downloaded ffmpeg sidecars (see scripts/prepare-ffmpeg.mjs)
+src-tauri/binaries/audio-compare-ffmpeg-*
 src-tauri/binaries/ffmpeg-*
 src-tauri/binaries/*.exe
 src-tauri/binaries/FFMPEG-LICENSE

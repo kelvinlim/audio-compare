@@ -17,15 +17,15 @@ pub struct FfmpegStatus {
 fn sidecar_filename() -> Option<&'static str> {
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
     {
-        return Some("ffmpeg-aarch64-apple-darwin");
+        return Some("audio-compare-ffmpeg-aarch64-apple-darwin");
     }
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     {
-        return Some("ffmpeg-x86_64-unknown-linux-gnu");
+        return Some("audio-compare-ffmpeg-x86_64-unknown-linux-gnu");
     }
     #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
     {
-        return Some("ffmpeg-x86_64-pc-windows-msvc.exe");
+        return Some("audio-compare-ffmpeg-x86_64-pc-windows-msvc.exe");
     }
     #[cfg(not(any(
         all(target_os = "macos", target_arch = "aarch64"),
@@ -39,9 +39,9 @@ fn sidecar_filename() -> Option<&'static str> {
 
 fn bundled_name() -> &'static str {
     if cfg!(windows) {
-        "ffmpeg.exe"
+        "audio-compare-ffmpeg.exe"
     } else {
-        "ffmpeg"
+        "audio-compare-ffmpeg"
     }
 }
 
