@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Build Linux aarch64 packages (`.deb`, AppImage, `.rpm`) in CI
+
 ## 0.3.1 — 2026-09-06
 
 - Install the bundled ffmpeg sidecar as `audio-compare-ffmpeg` so Linux `.deb`/`.rpm` packages do not overwrite `/usr/bin/ffmpeg`
