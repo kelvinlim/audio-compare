@@ -53,7 +53,7 @@ The setup screen defaults to **Jahzzar — Missing You** vs **32 kbps MP3** in *
 
 1. Pick a bundled track or import FLAC/WAV. First listen: Missing You, lossless vs 32 kbps MP3.
 2. Choose codec, bitrate, and **Open A/B** or **Blind ABX**.
-3. Play. Switch with the pads or the keyboard. The playhead stays put.
+3. Play. Switch with the pads or the keyboard. The playhead stays put. Click another library track anytime to restart with that source (same codec, bitrate, and mode).
 
 | Key | Action |
 | --- | --- |
