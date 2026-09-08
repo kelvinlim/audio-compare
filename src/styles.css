@@ -335,6 +335,16 @@ h3 {
   margin: 6px 0 10px;
 }
 
+.player.is-busy {
+  opacity: 0.72;
+}
+
+.player.is-busy .pads,
+.player.is-busy .transport,
+.player.is-busy .scoreboard {
+  pointer-events: none;
+}
+
 .eyebrow {
   font-family: "IBM Plex Mono", monospace;
   font-size: 0.78rem;
