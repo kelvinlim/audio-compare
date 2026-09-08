@@ -219,6 +219,48 @@ export default function App() {
     }
   };
 
+  const beginListening = async (nextTrackId: string) => {
+    if (!nextTrackId) {
+      setError("Pick a track first.");
+      return;
+    }
+    setError(null);
+    setBusy(true);
+    setProgress({ stage: "start", message: "Preparing comparison…" });
+    try {
+      if (session) {
+        await api.pause();
+      }
+      await api.prepareComparison(nextTrackId, codec, bitrate);
+      const next = await api.startSession(nextTrackId, codec, bitrate, mode, trialCount);
+      setTrackId(nextTrackId);
+      setSession(next);
+      setListenSource("a");
+      await api.setSource("a");
+      await api.play();
+      setHistory(await api.listHistory());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+      setProgress(null);
+    }
+  };
+
+  const selectTrack = (id: string) => {
+    if (busy) {
+      return;
+    }
+    if (!inSession) {
+      setTrackId(id);
+      return;
+    }
+    if (id === trackId) {
+      return;
+    }
+    void beginListening(id);
+  };
+
   const importFile = async () => {
     setError(null);
     const selected = await open({
@@ -230,30 +272,11 @@ export default function App() {
     }
     const track = await api.importTrack(selected);
     await refresh();
-    setTrackId(track.id);
+    selectTrack(track.id);
   };
 
   const start = async () => {
-    if (!trackId) {
-      setError("Pick a track first.");
-      return;
-    }
-    setError(null);
-    setBusy(true);
-    setProgress({ stage: "start", message: "Preparing comparison…" });
-    try {
-      await api.prepareComparison(trackId, codec, bitrate);
-      const next = await api.startSession(trackId, codec, bitrate, mode, trialCount);
-      setSession(next);
-      setListenSource("a");
-      await api.setSource("a");
-      await api.play();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-      setProgress(null);
-    }
+    await beginListening(trackId);
   };
 
   const switchSource = useCallback(async (source: "a" | "b" | "x") => {
@@ -308,7 +331,7 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!inSession || aboutOpen) {
+      if (!inSession || aboutOpen || busy) {
         return;
       }
       const target = event.target as HTMLElement | null;
@@ -340,7 +363,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [aboutOpen, cycleSource, inSession, player?.positionSeconds, submitVote, switchSource, togglePlay]);
+  }, [aboutOpen, busy, cycleSource, inSession, player?.positionSeconds, submitVote, switchSource, togglePlay]);
 
   return (
     <div className="app">
@@ -389,20 +412,23 @@ export default function App() {
                 Import
               </button>
             </div>
-            <p className="hint">Bundled diagnostics plus your own FLAC or WAV.</p>
+            <p className="hint">
+              Bundled diagnostics plus your own FLAC or WAV.
+              {inSession ? " Click another track to restart with that source." : ""}
+            </p>
             <TrackGroup
               label="Bundled"
               tracks={library.bundled}
               selectedId={trackId}
-              disabled={inSession}
-              onSelect={setTrackId}
+              disabled={busy}
+              onSelect={selectTrack}
             />
             <TrackGroup
               label="Your files"
               tracks={library.user}
               selectedId={trackId}
-              disabled={inSession}
-              onSelect={setTrackId}
+              disabled={busy}
+              onSelect={selectTrack}
             />
           </section>
           <section className="history">
@@ -439,7 +465,7 @@ export default function App() {
               busy={busy}
               progress={progress}
               ffmpegReady={ffmpeg === null || Boolean(ffmpeg.available)}
-              onSelectTrack={setTrackId}
+              onSelectTrack={selectTrack}
               onCodec={setCodec}
               onBitrate={setBitrate}
               onMode={setMode}
@@ -453,6 +479,8 @@ export default function App() {
               player={player}
               listenSource={listenSource}
               codecs={codecOptions}
+              busy={busy}
+              progress={progress}
               onSource={(source) => void switchSource(source)}
               onPlay={() => void togglePlay()}
               onSeek={(seconds) => void api.seek(seconds)}
@@ -737,6 +765,8 @@ function Player({
   player,
   listenSource,
   codecs,
+  busy,
+  progress,
   onSource,
   onPlay,
   onSeek,
@@ -747,6 +777,8 @@ function Player({
   player: PlayerStatus | null;
   listenSource: "a" | "b" | "x";
   codecs: CodecOption[];
+  busy: boolean;
+  progress: PrepareProgress | null;
   onSource: (source: "a" | "b" | "x") => void;
   onPlay: () => void;
   onSeek: (seconds: number) => void;
@@ -760,7 +792,7 @@ function Player({
   const remaining = Math.max(0, session.trialCount - answered);
 
   return (
-    <div className="player">
+    <div className={`player ${busy ? "is-busy" : ""}`}>
       <div className="player-head">
         <div>
           <p className="eyebrow">
@@ -768,8 +800,11 @@ function Player({
             {session.bitrate} kbps
           </p>
           <h1>{session.trackTitle}</h1>
+          {busy && (
+            <p className="hint">{progress?.message ?? "Preparing comparison…"}</p>
+          )}
         </div>
-        <button type="button" className="ghost" onClick={onEnd}>
+        <button type="button" className="ghost" onClick={onEnd} disabled={busy}>
           End session
         </button>
       </div>
@@ -779,12 +814,14 @@ function Player({
           letter="A"
           caption={open ? "Lossless" : "Reference A"}
           active={listenSource === "a"}
+          disabled={busy}
           onClick={() => onSource("a")}
         />
         <SourcePad
           letter="B"
           caption={open ? `${session.codec.toUpperCase()} ${session.bitrate}` : "Reference B"}
           active={listenSource === "b"}
+          disabled={busy}
           onClick={() => onSource("b")}
         />
         {!open && (
@@ -792,6 +829,7 @@ function Player({
             letter="X"
             caption="Mystery"
             active={listenSource === "x"}
+            disabled={busy}
             onClick={() => onSource("x")}
           />
         )}
@@ -814,7 +852,7 @@ function Player({
       </p>
 
       <div className="transport">
-        <button type="button" className="play" onClick={onPlay}>
+        <button type="button" className="play" onClick={onPlay} disabled={busy}>
           {player?.playing ? "Pause" : "Play"}
         </button>
         <input
@@ -823,6 +861,7 @@ function Player({
           max={Math.max(duration, 0.01)}
           step={0.01}
           value={Math.min(position, duration)}
+          disabled={busy}
           onChange={(event) => onSeek(Number(event.target.value))}
         />
         <span className="clock">
@@ -852,10 +891,10 @@ function Player({
             <div>
               <h2>Is X the same as A or B?</h2>
               <div className="vote-row">
-                <button type="button" onClick={() => onVote("a")}>
+                <button type="button" onClick={() => onVote("a")} disabled={busy}>
                   X is A
                 </button>
-                <button type="button" onClick={() => onVote("b")}>
+                <button type="button" onClick={() => onVote("b")} disabled={busy}>
                   X is B
                 </button>
               </div>
@@ -878,17 +917,20 @@ function SourcePad({
   letter,
   caption,
   active,
+  disabled,
   onClick,
 }: {
   letter: string;
   caption: string;
   active: boolean;
+  disabled?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       className={`pad pad-${letter.toLowerCase()} ${active ? "active" : ""}`}
+      disabled={disabled}
       onClick={onClick}
     >
       <span className="letter">{letter}</span>

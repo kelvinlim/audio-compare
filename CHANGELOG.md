@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Clicking another library track during a session restarts listening with that source
+
 ## 0.3.1 — 2026-09-06
 
 - Install the bundled ffmpeg sidecar as `audio-compare-ffmpeg` so Linux `.deb`/`.rpm` packages do not overwrite `/usr/bin/ffmpeg`
