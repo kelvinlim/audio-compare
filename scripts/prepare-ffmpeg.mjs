@@ -21,6 +21,11 @@ const TARGETS = {
     license: "linux-x64.LICENSE",
     exe: false,
   },
+  "aarch64-unknown-linux-gnu": {
+    asset: "ffmpeg-linux-arm64.gz",
+    license: "linux-arm64.LICENSE",
+    exe: false,
+  },
   "x86_64-pc-windows-msvc": {
     asset: "ffmpeg-win32-x64.gz",
     license: "win32-x64.LICENSE",
@@ -45,6 +50,9 @@ function hostTarget() {
   }
   if (process.platform === "linux" && process.arch === "x64") {
     return "x86_64-unknown-linux-gnu";
+  }
+  if (process.platform === "linux" && process.arch === "arm64") {
+    return "aarch64-unknown-linux-gnu";
   }
   if (process.platform === "win32" && process.arch === "x64") {
     return "x86_64-pc-windows-msvc";
@@ -75,6 +83,7 @@ function canRunSidecar(target) {
   return (
     (target === "aarch64-apple-darwin" && process.platform === "darwin" && process.arch === "arm64") ||
     (target === "x86_64-unknown-linux-gnu" && process.platform === "linux" && process.arch === "x64") ||
+    (target === "aarch64-unknown-linux-gnu" && process.platform === "linux" && process.arch === "arm64") ||
     (target === "x86_64-pc-windows-msvc" && process.platform === "win32" && process.arch === "x64")
   );
 }
