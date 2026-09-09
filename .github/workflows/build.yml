@@ -103,7 +103,11 @@ jobs:
 
       - name: Read app version
         id: app-version
-        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "app version=$version"
 
       # Version in the cache key so a bump cannot reuse incremental tauri-build
       # artifacts that still embed the previous frontend. Tag builds skip the
