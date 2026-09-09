@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.2 — 2026-09-09
+
+- Publish Linux aarch64 packages (`.deb`, AppImage, `.rpm`) alongside the existing macOS, Windows, and Linux x86_64 builds
+
 ## 0.3.1 — 2026-09-06
 
 - Install the bundled ffmpeg sidecar as `audio-compare-ffmpeg` so Linux `.deb`/`.rpm` packages do not overwrite `/usr/bin/ffmpeg`

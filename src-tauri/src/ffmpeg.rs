@@ -23,6 +23,10 @@ fn sidecar_filename() -> Option<&'static str> {
     {
         return Some("audio-compare-ffmpeg-x86_64-unknown-linux-gnu");
     }
+    #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+    {
+        return Some("audio-compare-ffmpeg-aarch64-unknown-linux-gnu");
+    }
     #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
     {
         return Some("audio-compare-ffmpeg-x86_64-pc-windows-msvc.exe");
@@ -30,6 +34,7 @@ fn sidecar_filename() -> Option<&'static str> {
     #[cfg(not(any(
         all(target_os = "macos", target_arch = "aarch64"),
         all(target_os = "linux", target_arch = "x86_64"),
+        all(target_os = "linux", target_arch = "aarch64"),
         all(target_os = "windows", target_arch = "x86_64")
     )))]
     {
