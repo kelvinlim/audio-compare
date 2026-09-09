@@ -1,14 +1,15 @@
 {
   "name": "audio-compare",
   "private": true,
-  "version": "0.3.2",
+  "version": "0.3.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && node scripts/check-app-version.mjs",
     "preview": "vite preview",
     "tauri": "tauri",
-    "prepare-ffmpeg": "node scripts/prepare-ffmpeg.mjs"
+    "prepare-ffmpeg": "node scripts/prepare-ffmpeg.mjs",
+    "check-app-version": "node scripts/check-app-version.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

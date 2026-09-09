@@ -99,7 +99,7 @@ Encoded files are cached under the OS app-data directory, keyed by source hash +
 
 ## Status
 
-v0.3.2, desktop (macOS ARM, Windows x64, Linux x86_64, Linux aarch64). ffmpeg is bundled. macOS is Developer ID signed and notarized.
+v0.3.3, desktop (macOS ARM, Windows x64, Linux x86_64, Linux aarch64). ffmpeg is bundled. macOS is Developer ID signed and notarized.
 
 Not in this version: staircase / threshold detection, exclusive (bit-perfect) output, AAC, mobile, or web.
 

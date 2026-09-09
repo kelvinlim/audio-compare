@@ -14,7 +14,27 @@ permissions:
   contents: write
 
 jobs:
+  frontend:
+    name: frontend version
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend and assert package version
+        run: npm run build
+
   build:
+    needs: frontend
     strategy:
       fail-fast: false
       matrix:
@@ -81,10 +101,19 @@ jobs:
         with:
           targets: ${{ matrix.rust_target }}
 
+      - name: Read app version
+        id: app-version
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      # Version in the cache key so a bump cannot reuse incremental tauri-build
+      # artifacts that still embed the previous frontend. Tag builds skip the
+      # cache entirely so a release never links a stale target/.
       - name: Rust cache
+        if: github.ref_type != 'tag'
         uses: swatinem/rust-cache@v2
         with:
           workspaces: ./src-tauri -> target
+          key: app-v${{ steps.app-version.outputs.version }}
 
       - name: Install frontend dependencies
         run: npm ci

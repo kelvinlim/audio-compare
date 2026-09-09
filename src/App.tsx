@@ -1,6 +1,7 @@
+import { getVersion } from "@tauri-apps/api/app";
+import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import changelog from "../CHANGELOG.md?raw";
 import { api } from "./api";
@@ -75,6 +76,29 @@ async function loadSafely<T>(fn: () => Promise<T>): Promise<T | null> {
   }
 }
 
+function bakedVersion(): string {
+  return typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "";
+}
+
+/** Prefer Tauri's packaged version (tauri.conf.json) over the Vite bake-time define. */
+function useAppVersion(): string {
+  const [version, setVersion] = useState(bakedVersion);
+  useEffect(() => {
+    let cancelled = false;
+    void getVersion()
+      .then((runtime) => {
+        if (!cancelled && runtime) {
+          setVersion(runtime);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return version;
+}
+
 export default function App() {
   const [ffmpeg, setFfmpeg] = useState<FfmpegStatus | null>(null);
   const [library, setLibrary] = useState<Library>({ bundled: [], user: [] });
@@ -94,6 +118,7 @@ export default function App() {
   const [progress, setProgress] = useState<PrepareProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const appVersion = useAppVersion();
 
   const tracks = useMemo(
     () => [...library.bundled, ...library.user],
@@ -348,7 +373,7 @@ export default function App() {
         <div className="brand-block">
           <div className="brand">
             <span className="wordmark">Audio Compare</span>
-            <span className="version">v{__APP_VERSION__}</span>
+            <span className="version">{appVersion ? `v${appVersion}` : ""}</span>
             <span className="badge">ABX</span>
           </div>
           <button type="button" className="ghost" onClick={() => setAboutOpen((open) => !open)}>
@@ -378,7 +403,7 @@ export default function App() {
       {error && <div className="banner error">{error}</div>}
 
       {aboutOpen ? (
-        <About />
+        <About version={appVersion} />
       ) : (
       <div className="layout">
         <aside className="sidebar">
@@ -467,7 +492,7 @@ export default function App() {
   );
 }
 
-function About() {
+function About({ version }: { version: string }) {
   const openRepo = async () => {
     try {
       await openUrl(REPO_URL);
@@ -478,7 +503,7 @@ function About() {
 
   return (
     <main className="main about">
-      <p className="eyebrow">Audio Compare v{__APP_VERSION__}</p>
+      <p className="eyebrow">Audio Compare{version ? ` v${version}` : ""}</p>
       <h1>About</h1>
       <p>
         Source, issues, and releases:{" "}
