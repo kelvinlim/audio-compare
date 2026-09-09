@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.3 — 2026-09-09
+
+- Show the Tauri runtime app version in the header and About page so packaged builds cannot display a stale bake-time string (v0.3.2 Linux packages still showed v0.3.1)
+- Fail the frontend build if the JS bundle is missing the `package.json` version
+
 ## 0.3.2 — 2026-09-09
 
 - Publish Linux aarch64 packages (`.deb`, AppImage, `.rpm`) alongside the existing macOS, Windows, and Linux x86_64 builds
