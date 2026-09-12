@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Play/pause uses icons with accessible Play/Pause names (Lester Longley)
+- Escape ends an active session; Escape first closes About or the output-device menu
+
 ## 0.4.0 — 2026-09-12
 
 - Time-align A and B before Δ RMS and playback so codec encoder/decoder delay does not inflate the residual or jump the playhead on A↔B switches

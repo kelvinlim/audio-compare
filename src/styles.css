@@ -430,6 +430,22 @@ h3 {
   background: #261614;
 }
 
+.play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+}
+
+.play-icon {
+  display: block;
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
 .transport {
   display: grid;
   grid-template-columns: auto 1fr auto;

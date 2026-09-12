@@ -333,16 +333,29 @@ export default function App() {
     setHistory(await api.listHistory());
   }, [session]);
 
-  const endSession = async () => {
+  const endSession = useCallback(async () => {
     await api.pause();
     setSession(null);
     setPlayer(null);
     setListenSource("a");
     setHistory(await api.listHistory());
-  };
+  }, []);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        if (aboutOpen) {
+          event.preventDefault();
+          setAboutOpen(false);
+          return;
+        }
+        if (inSession) {
+          event.preventDefault();
+          void endSession();
+        }
+        return;
+      }
+
       if (!inSession || aboutOpen) {
         return;
       }
@@ -375,7 +388,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [aboutOpen, cycleSource, inSession, player?.positionSeconds, submitVote, switchSource, togglePlay]);
+  }, [aboutOpen, cycleSource, endSession, inSession, player?.positionSeconds, submitVote, switchSource, togglePlay]);
 
   return (
     <div className="app">
@@ -734,6 +747,23 @@ function DevicePicker({
 }) {
   const [open, setOpen] = useState(false);
   const current = devices.find((device) => device.name === value) ?? devices[0];
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      setOpen(false);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [open]);
+
   return (
     <div className="device">
       <span>Output</span>
@@ -855,8 +885,14 @@ function Player({
       </p>
 
       <div className="transport">
-        <button type="button" className="play" onClick={onPlay}>
-          {player?.playing ? "Pause" : "Play"}
+        <button
+          type="button"
+          className="play"
+          onClick={onPlay}
+          aria-label={player?.playing ? "Pause" : "Play"}
+          title={player?.playing ? "Pause" : "Play"}
+        >
+          <PlayPauseIcon playing={Boolean(player?.playing)} />
         </button>
         <input
           type="range"
@@ -872,7 +908,7 @@ function Player({
       </div>
 
       <p className="keys">
-        A / B{open ? "" : " / X"} switch · Tab cycle · Space play · ← → seek
+        A / B{open ? "" : " / X"} switch · Tab cycle · Space play · Esc end · ← → seek
         {open ? "" : " · 1 / 2 vote X is A or B"}
       </p>
 
@@ -912,6 +948,22 @@ function Player({
         </div>
       )}
     </div>
+  );
+}
+
+function PlayPauseIcon({ playing }: { playing: boolean }) {
+  if (playing) {
+    return (
+      <svg className="play-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="5" y="4" width="5" height="16" rx="1.2" />
+        <rect x="14" y="4" width="5" height="16" rx="1.2" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="play-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8 5.2v13.6L19 12 8 5.2z" />
+    </svg>
   );
 }
 
