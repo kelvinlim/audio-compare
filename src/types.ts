@@ -47,6 +47,9 @@ export interface PlayerStatus {
   loaded: boolean;
   buffersDiffer: boolean;
   diffRms: number;
+  unalignedDiffRms: number;
+  lagFrames: number;
+  lagMs: number;
 }
 
 export interface Trial {
@@ -99,6 +102,9 @@ export interface PrepareInfo {
   cached: boolean;
   encodedPath: string;
   diffRms: number;
+  unalignedDiffRms: number;
+  lagFrames: number;
+  lagMs: number;
 }
 
 export interface SourceSwitch {

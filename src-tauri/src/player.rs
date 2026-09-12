@@ -1,12 +1,11 @@
+use crate::align::{self, CHANNELS};
 use crate::error::{AppError, AppResult};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Sample, SampleFormat, SizedSample, StreamConfig};
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicU8, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex, RwLock};
-
-const CHANNELS: usize = 2;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -52,6 +51,19 @@ pub struct PlayerStatus {
     pub loaded: bool,
     pub buffers_differ: bool,
     pub diff_rms: f64,
+    pub unaligned_diff_rms: f64,
+    pub lag_frames: i32,
+    pub lag_ms: f64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AlignmentInfo {
+    pub diff_rms: f64,
+    pub unaligned_diff_rms: f64,
+    pub lag_frames: i32,
+    pub lag_ms: f64,
+    pub duration_seconds: f64,
 }
 
 struct Buffers {
@@ -67,6 +79,8 @@ struct Shared {
     playing: AtomicBool,
     sample_rate: AtomicU32,
     diff_rms_bits: AtomicU32,
+    unaligned_diff_rms_bits: AtomicU32,
+    lag_frames: AtomicI32,
 }
 
 enum Command {
@@ -91,6 +105,8 @@ impl PlayerHandle {
             playing: AtomicBool::new(false),
             sample_rate: AtomicU32::new(48_000),
             diff_rms_bits: AtomicU32::new(0.0f32.to_bits()),
+            unaligned_diff_rms_bits: AtomicU32::new(0.0f32.to_bits()),
+            lag_frames: AtomicI32::new(0),
         });
         let device_name = Arc::new(Mutex::new(None));
         let thread_shared = shared.clone();
@@ -106,7 +122,9 @@ impl PlayerHandle {
         }
     }
 
-    pub fn load(&self, a: Vec<f32>, b: Vec<f32>, sample_rate: u32) -> AppResult<f64> {
+    pub fn load(&self, a: Vec<f32>, b: Vec<f32>, sample_rate: u32) -> AppResult<AlignmentInfo> {
+        let unaligned = pcm_diff_rms(&a, &b);
+        let (a, b, lag) = align::align_stereo_pair(a, b, sample_rate);
         let diff = pcm_diff_rms(&a, &b);
         if !buffers_are_distinct(diff) {
             return Err(AppError::msg(
@@ -126,10 +144,22 @@ impl PlayerHandle {
         self.shared
             .diff_rms_bits
             .store((diff as f32).to_bits(), Ordering::Release);
+        self.shared
+            .unaligned_diff_rms_bits
+            .store((unaligned as f32).to_bits(), Ordering::Release);
+        self.shared
+            .lag_frames
+            .store(lag.lag_frames, Ordering::Release);
         self.tx
             .send(Command::RebuildStream)
             .map_err(|_| AppError::msg("audio engine is not running"))?;
-        Ok(diff)
+        Ok(AlignmentInfo {
+            diff_rms: diff,
+            unaligned_diff_rms: unaligned,
+            lag_frames: lag.lag_frames,
+            lag_ms: lag.lag_ms,
+            duration_seconds: frame_len as f64 / f64::from(sample_rate.max(1)),
+        })
     }
 
     pub fn play(&self) -> AppResult<()> {
@@ -153,10 +183,9 @@ impl PlayerHandle {
             .map(|b| b.frame_len)
             .unwrap_or(0);
         let frame = (seconds.max(0.0) * rate) as usize;
-        self.shared.playhead.store(
-            frame.min(frame_len.saturating_sub(1)),
-            Ordering::Release,
-        );
+        self.shared
+            .playhead
+            .store(frame.min(frame_len.saturating_sub(1)), Ordering::Release);
         Ok(())
     }
 
@@ -193,6 +222,9 @@ impl PlayerHandle {
             .unwrap_or(0);
         let position = self.shared.playhead.load(Ordering::Relaxed);
         let diff_rms = f32::from_bits(self.shared.diff_rms_bits.load(Ordering::Acquire)) as f64;
+        let unaligned_diff_rms =
+            f32::from_bits(self.shared.unaligned_diff_rms_bits.load(Ordering::Acquire)) as f64;
+        let lag_frames = self.shared.lag_frames.load(Ordering::Acquire);
         PlayerStatus {
             playing: self.shared.playing.load(Ordering::Acquire),
             source: Source::from_index(self.shared.source.load(Ordering::Acquire)),
@@ -202,6 +234,9 @@ impl PlayerHandle {
             loaded,
             buffers_differ: buffers_are_distinct(diff_rms),
             diff_rms,
+            unaligned_diff_rms,
+            lag_frames,
+            lag_ms: f64::from(lag_frames) * 1000.0 / sample_rate as f64,
         }
     }
 }

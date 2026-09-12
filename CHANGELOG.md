@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0 — 2026-09-12
+
+- Time-align A and B before Δ RMS and playback so codec encoder/decoder delay does not inflate the residual or jump the playhead on A↔B switches
+- Show estimated lag (samples and milliseconds) plus aligned vs unaligned Δ RMS on the player
+
 ## 0.3.3 — 2026-09-09
 
 - Show the Tauri runtime app version in the header and About page so packaged builds cannot display a stale bake-time string (v0.3.2 Linux packages still showed v0.3.1)

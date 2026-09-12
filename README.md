@@ -10,7 +10,7 @@ Built with [Tauri 2](https://tauri.app/), React, and Rust. Playback is raw PCM t
 
 - **Open A/B** — A is lossless, B is the encode. Toggle freely.
 - **Blind ABX** — X is randomly A or B each trial. Vote whether X is A or B. After N trials you get *k* correct of *N* and a one-sided binomial p-value vs chance.
-- **Matched playback** — both sides decode to the same PCM format at the output device rate, so you are comparing codecs, not players or containers.
+- **Matched playback** — both sides decode to the same PCM format at the output device rate and are time-aligned (bounded cross-correlation, ±100 ms) so encoder delay does not shift the playhead.
 - **Instant A / B / X** — same playhead, no restart.
 - **Output device picker** — including system default.
 - **Bundled open-licensed tracks** plus import of your own FLAC/WAV.
@@ -99,7 +99,7 @@ Encoded files are cached under the OS app-data directory, keyed by source hash +
 
 ## Status
 
-v0.3.3, desktop (macOS ARM, Windows x64, Linux x86_64, Linux aarch64). ffmpeg is bundled. macOS is Developer ID signed and notarized.
+v0.4.0, desktop (macOS ARM, Windows x64, Linux x86_64, Linux aarch64). ffmpeg is bundled. macOS is Developer ID signed and notarized.
 
 Not in this version: staircase / threshold detection, exclusive (bit-perfect) output, AAC, mobile, or web.
 

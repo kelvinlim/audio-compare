@@ -268,5 +268,23 @@ mod tests {
         assert!(pcm_a.len() > 48_000);
         assert!((pcm_a.len() as i64 - pcm_b.len() as i64).abs() < 48_000);
         assert!((pcm_a.len() as i64 - pcm_c.len() as i64).abs() < 48_000);
+
+        let max_lag = crate::align::max_lag_frames(48_000) as i32;
+        for (label, lossy) in [("mp3", pcm_b), ("opus", pcm_c)] {
+            let unaligned = crate::player::pcm_diff_rms(&pcm_a, &lossy);
+            let (aligned_a, aligned_b, lag) =
+                crate::align::align_stereo_pair(pcm_a.clone(), lossy, 48_000);
+            let aligned = crate::player::pcm_diff_rms(&aligned_a, &aligned_b);
+            assert!(
+                lag.lag_frames.abs() <= max_lag,
+                "{label} lag {} outside ±{max_lag}",
+                lag.lag_frames
+            );
+            assert!(
+                aligned <= unaligned + 1e-6,
+                "{label} aligned RMS {aligned} > unaligned {unaligned}"
+            );
+            assert!(aligned > 1e-6, "{label} should still differ after align");
+        }
     }
 }
