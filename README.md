@@ -60,6 +60,7 @@ The setup screen defaults to **Jahzzar — Missing You** vs **32 kbps MP3** in *
 | `A` `B` `X` | Switch source (`X` in blind mode only) |
 | Tab | Cycle A/B (or A/B/X in blind) |
 | Space | Play / pause |
+| Esc | End session (closes About or the output menu first) |
 | `1` / `2` | Vote X is A or B (blind) |
 | ← → | Seek |
 
