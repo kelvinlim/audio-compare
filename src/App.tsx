@@ -28,6 +28,16 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+function formatLag(frames: number, ms: number): string {
+  if (!Number.isFinite(frames) || frames === 0) {
+    return "lag 0";
+  }
+  const side = frames > 0 ? "B later" : "A later";
+  const frameLabel = frames > 0 ? `+${frames}` : `${frames}`;
+  const msLabel = `${ms > 0 ? "+" : ""}${ms.toFixed(1)}`;
+  return `lag ${frameLabel} smp / ${msLabel} ms (${side})`;
+}
+
 function formatP(p: number): string {
   if (p < 0.001) {
     return "p < 0.001";
@@ -601,9 +611,9 @@ function Setup({
       <p className="eyebrow">New comparison</p>
       <h1>{track?.title ?? "Choose a lossless track"}</h1>
       <p className="lede">
-        Both the original and the encode are decoded to the same PCM stream, then
-        switched at the same playhead. You are hearing codec artifacts, not player
-        differences.
+        Both the original and the encode are decoded to the same PCM stream,
+        time-aligned, then switched at the same playhead. You are hearing codec
+        artifacts, not player differences or encoder delay.
       </p>
       <p className="hint">
         Suggested first listen: Jahzzar — Missing You, lossless vs 32 kbps MP3. The
@@ -831,7 +841,13 @@ function Player({
             {" "}
             · A≠B confirmed
             {Number.isFinite(player.diffRms)
-              ? ` (Δ RMS ${player.diffRms.toExponential(2)})`
+              ? ` (Δ RMS ${player.diffRms.toExponential(2)}${
+                  Number.isFinite(player.unalignedDiffRms) &&
+                  Math.abs(player.unalignedDiffRms - player.diffRms) >
+                    player.diffRms * 0.01 + 1e-9
+                    ? `, unaligned ${player.unalignedDiffRms.toExponential(2)}`
+                    : ""
+                }; ${formatLag(player.lagFrames, player.lagMs)})`
               : ""}
           </>
         )}

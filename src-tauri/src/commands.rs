@@ -24,6 +24,9 @@ pub struct PrepareInfo {
     pub cached: bool,
     pub encoded_path: String,
     pub diff_rms: f64,
+    pub unaligned_diff_rms: f64,
+    pub lag_frames: i32,
+    pub lag_ms: f64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -112,11 +115,7 @@ pub fn prepare_comparison(
     let cached = encoded_path.exists();
 
     if !cached {
-        emit_progress(
-            &app,
-            "encode",
-            &format!("Encoding {codec} {bitrate} kbps…"),
-        );
+        emit_progress(&app, "encode", &format!("Encoding {codec} {bitrate} kbps…"));
         ffmpeg::encode_lossy(&ffmpeg_bin, &source, &encoded_path, &codec, bitrate)?;
     }
 
@@ -130,16 +129,19 @@ pub fn prepare_comparison(
         return Err(AppError::msg("decoded audio is empty").into());
     }
 
-    let frames = (pcm_a.len().min(pcm_b.len()) / 2) as f64;
-    let diff_rms = state.player.load(pcm_a, pcm_b, sample_rate)?;
+    emit_progress(&app, "align", "Time-aligning A and B…");
+    let loaded = state.player.load(pcm_a, pcm_b, sample_rate)?;
     emit_progress(&app, "ready", "Ready to listen");
 
     Ok(PrepareInfo {
-        duration_seconds: frames / sample_rate as f64,
+        duration_seconds: loaded.duration_seconds,
         sample_rate,
         cached,
         encoded_path: encoded_path.to_string_lossy().into_owned(),
-        diff_rms,
+        diff_rms: loaded.diff_rms,
+        unaligned_diff_rms: loaded.unaligned_diff_rms,
+        lag_frames: loaded.lag_frames,
+        lag_ms: loaded.lag_ms,
     })
 }
 
@@ -201,14 +203,7 @@ pub fn start_session(
     trial_count: u32,
 ) -> Result<Session, String> {
     let track = library::find_track(&app, &state.data_dir, &track_id)?;
-    let session = history::start_session(
-        track.id,
-        track.title,
-        codec,
-        bitrate,
-        mode,
-        trial_count,
-    );
+    let session = history::start_session(track.id, track.title, codec, bitrate, mode, trial_count);
     if session.mode == SessionMode::Open {
         history::save_session(&state.data_dir, &session)?;
     }
