@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.1 — 2026-09-12
 
 - Play/pause uses icons with accessible Play/Pause names (Lester Longley)
 - Escape ends an active session; Escape first closes About or the output-device menu
