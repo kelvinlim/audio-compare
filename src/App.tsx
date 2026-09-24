@@ -529,6 +529,7 @@ export default function App() {
               onSeek={(seconds) => void api.seek(seconds)}
               onVote={(choice) => void submitVote(choice)}
               onEnd={() => void endSession()}
+              onOpenTips={() => setPanel("tips")}
             />
           )}
         </main>
@@ -665,6 +666,44 @@ function TrackTipBody({ tip }: { tip: NonNullable<ReturnType<typeof tipForTrack>
   );
 }
 
+function TrackTipCard({
+  trackId,
+  onOpenTips,
+}: {
+  trackId: string | null | undefined;
+  onOpenTips: () => void;
+}) {
+  const tip = tipForTrack(trackId);
+  if (!tip) {
+    return null;
+  }
+  return (
+    <aside className="tip-card">
+      <div className="section-head">
+        <h2>What to listen for</h2>
+        <button type="button" className="link" onClick={onOpenTips}>
+          All tips
+        </button>
+      </div>
+      <p>
+        <strong>Stresses. </strong>
+        {tip.stresses}
+      </p>
+      <p>
+        <strong>Where. </strong>
+        {tip.listenWhere.map((cue, index) => (
+          <span key={cue.range}>
+            {index > 0 ? "; " : ""}
+            <span className="cue-range">{cue.range}</span>
+            {` ${cue.note}`}
+          </span>
+        ))}
+      </p>
+      <p className="hint">{tip.howToUse}</p>
+    </aside>
+  );
+}
+
 function TrackGroup({
   label,
   tracks,
@@ -746,7 +785,6 @@ function Setup({
   onOpenTips: () => void;
 }) {
   const selected = codecs.find((item) => item.id === codec);
-  const tip = tipForTrack(track?.id);
   return (
     <div className="setup">
       <p className="eyebrow">New comparison</p>
@@ -760,31 +798,7 @@ function Setup({
         Suggested first listen: Jahzzar — Missing You, lossless vs 32 kbps MP3. The
         difference should be obvious; then try a higher bitrate or another track.
       </p>
-      {tip && (
-        <aside className="tip-card">
-          <div className="section-head">
-            <h2>What to listen for</h2>
-            <button type="button" className="link" onClick={onOpenTips}>
-              All tips
-            </button>
-          </div>
-          <p>
-            <strong>Stresses. </strong>
-            {tip.stresses}
-          </p>
-          <p>
-            <strong>Where. </strong>
-            {tip.listenWhere.map((cue, index) => (
-              <span key={cue.range}>
-                {index > 0 ? "; " : ""}
-                <span className="cue-range">{cue.range}</span>
-                {` ${cue.note}`}
-              </span>
-            ))}
-          </p>
-          <p className="hint">{tip.howToUse}</p>
-        </aside>
-      )}
+      <TrackTipCard trackId={track?.id} onOpenTips={onOpenTips} />
 
       <div className="field">
         <span>Track</span>
@@ -960,6 +974,7 @@ function Player({
   onSeek,
   onVote,
   onEnd,
+  onOpenTips,
 }: {
   session: Session;
   player: PlayerStatus | null;
@@ -970,6 +985,7 @@ function Player({
   onSeek: (seconds: number) => void;
   onVote: (choice: "a" | "b") => void;
   onEnd: () => void;
+  onOpenTips: () => void;
 }) {
   const duration = player?.durationSeconds ?? 0;
   const position = player?.positionSeconds ?? 0;
@@ -1064,6 +1080,8 @@ function Player({
         A / B{open ? "" : " / X"} switch · Tab cycle · Space play · Esc end · ← → seek
         {open ? "" : " · 1 / 2 vote X is A or B"}
       </p>
+
+      <TrackTipCard trackId={session.trackId} onOpenTips={onOpenTips} />
 
       {!open && (
         <div className="scoreboard">
