@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.3 — 2026-09-24
+
+- Show the compact “What to listen for” tip card under the player during Open A/B and Blind ABX (same card as Setup, with an All tips link)
+
 ## 0.4.2 — 2026-09-24
 
 - New bundled tracks: Applause — Large hall (CC0); Satie Gymnopédie No. 1 fingerstyle guitar (CC BY-SA 4.0)

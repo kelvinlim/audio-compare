@@ -1,6 +1,6 @@
 [package]
 name = "audio-compare"
-version = "0.4.2"
+version = "0.4.3",
 description = "Open A/B and blind ABX listening tests for lossless vs lossy audio"
 authors = ["Kelvin O. Lim"]
 edition = "2021"
