@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.2 — 2026-09-24
+
+- New bundled tracks: Applause — Large hall (CC0); Satie Gymnopédie No. 1 fingerstyle guitar (CC BY-SA 4.0)
+- In-app Listening tips / What to listen for (cue times, general ABX tips, per-track cards)
+
 ## 0.4.1 — 2026-09-12
 
 - Play/pause uses icons with accessible Play/Pause names (Lester Longley)
