@@ -5,6 +5,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import changelog from "../CHANGELOG.md?raw";
 import { api } from "./api";
+import { bundledTipOrder, listeningGuide, tipForTrack } from "./listeningTips";
 import type {
   CodecOption,
   DeviceInfo,
@@ -127,7 +128,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<PrepareProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [aboutOpen, setAboutOpen] = useState(false);
+  const [panel, setPanel] = useState<null | "about" | "tips">(null);
   const appVersion = useAppVersion();
 
   const tracks = useMemo(
@@ -344,9 +345,9 @@ export default function App() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        if (aboutOpen) {
+        if (panel) {
           event.preventDefault();
-          setAboutOpen(false);
+          setPanel(null);
           return;
         }
         if (inSession) {
@@ -356,7 +357,7 @@ export default function App() {
         return;
       }
 
-      if (!inSession || aboutOpen) {
+      if (!inSession || panel) {
         return;
       }
       const target = event.target as HTMLElement | null;
@@ -388,7 +389,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [aboutOpen, cycleSource, endSession, inSession, player?.positionSeconds, submitVote, switchSource, togglePlay]);
+  }, [cycleSource, endSession, inSession, panel, player?.positionSeconds, submitVote, switchSource, togglePlay]);
 
   return (
     <div className="app">
@@ -399,9 +400,22 @@ export default function App() {
             <span className="version">{appVersion ? `v${appVersion}` : ""}</span>
             <span className="badge">ABX</span>
           </div>
-          <button type="button" className="ghost" onClick={() => setAboutOpen((open) => !open)}>
-            {aboutOpen ? "Back" : "About"}
-          </button>
+          <div className="header-links">
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => setPanel((current) => (current === "about" ? null : "about"))}
+            >
+              {panel === "about" ? "Back" : "About"}
+            </button>
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => setPanel((current) => (current === "tips" ? null : "tips"))}
+            >
+              {panel === "tips" ? "Back" : "Listening tips"}
+            </button>
+          </div>
         </div>
         <DevicePicker
           devices={deviceOptions}
@@ -425,8 +439,13 @@ export default function App() {
       )}
       {error && <div className="banner error">{error}</div>}
 
-      {aboutOpen ? (
-        <About version={appVersion} />
+      {panel === "about" ? (
+        <About version={appVersion} onOpenTips={() => setPanel("tips")} />
+      ) : panel === "tips" ? (
+        <ListeningTips
+          selectedId={selectedTrack?.id ?? trackId}
+          onBack={() => setPanel(null)}
+        />
       ) : (
       <div className="layout">
         <aside className="sidebar">
@@ -438,6 +457,9 @@ export default function App() {
               </button>
             </div>
             <p className="hint">Bundled diagnostics plus your own FLAC or WAV.</p>
+            <button type="button" className="link sidebar-link" onClick={() => setPanel("tips")}>
+              What to listen for
+            </button>
             <TrackGroup
               label="Bundled"
               tracks={library.bundled}
@@ -494,6 +516,7 @@ export default function App() {
               onTrials={setTrialCount}
               onImport={() => void importFile()}
               onStart={() => void start()}
+              onOpenTips={() => setPanel("tips")}
             />
           ) : (
             <Player
@@ -515,7 +538,13 @@ export default function App() {
   );
 }
 
-function About({ version }: { version: string }) {
+function About({
+  version,
+  onOpenTips,
+}: {
+  version: string;
+  onOpenTips: () => void;
+}) {
   const openRepo = async () => {
     try {
       await openUrl(REPO_URL);
@@ -534,9 +563,105 @@ function About({ version }: { version: string }) {
           {REPO_URL}
         </button>
       </p>
+      <p>
+        Cue times and “what to listen for” on each bundled clip:{" "}
+        <button type="button" className="link" onClick={onOpenTips}>
+          Listening tips
+        </button>
+        .
+      </p>
       <h2>Changes</h2>
       <pre className="changelog">{changelog.trim()}</pre>
     </main>
+  );
+}
+
+function ListeningTips({
+  selectedId,
+  onBack,
+}: {
+  selectedId: string;
+  onBack: () => void;
+}) {
+  const selectedKey = selectedId.startsWith("bundled:")
+    ? selectedId.slice("bundled:".length)
+    : "";
+
+  useEffect(() => {
+    if (!selectedKey || !listeningGuide.tracks[selectedKey]) {
+      return;
+    }
+    const node = document.getElementById(`tip-${selectedKey}`);
+    node?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [selectedKey]);
+
+  return (
+    <main className="main about tips">
+      <p className="eyebrow">What to listen for</p>
+      <h1>Listening tips</h1>
+      <p className="lede">
+        Practical cues for the bundled clips at ~64–128 kbps. Times are MM:SS on
+        the lossless file. They come from 96 kbps MP3 residuals plus a listen
+        to each FLAC — not from folklore.
+      </p>
+
+      <section className="tip-block">
+        <h2>{listeningGuide.general.title}</h2>
+        {listeningGuide.general.paragraphs.map((paragraph) => (
+          <p key={paragraph.slice(0, 32)}>{paragraph}</p>
+        ))}
+      </section>
+
+      {bundledTipOrder.map((id) => {
+        const tip = listeningGuide.tracks[id];
+        return (
+          <section
+            key={id}
+            id={`tip-${id}`}
+            className={`tip-block${id === selectedKey ? " selected-tip" : ""}`}
+          >
+            <TrackTipBody tip={tip} />
+          </section>
+        );
+      })}
+
+      <p className="hint">
+        <button type="button" className="link" onClick={onBack}>
+          Back to setup
+        </button>
+      </p>
+    </main>
+  );
+}
+
+function TrackTipBody({ tip }: { tip: NonNullable<ReturnType<typeof tipForTrack>> }) {
+  return (
+    <>
+      <h2>{tip.title}</h2>
+      <p>
+        <strong>Stresses. </strong>
+        {tip.stresses}
+      </p>
+      <p>
+        <strong>What lossy usually does. </strong>
+        {tip.lossyDoes}
+      </p>
+      <p>
+        <strong>Where to listen.</strong>
+      </p>
+      <ul className="cue-list">
+        {tip.listenWhere.map((cue) => (
+          <li key={`${cue.range}-${cue.note.slice(0, 24)}`}>
+            <span className="cue-range">{cue.range}</span>
+            <span>{cue.note}</span>
+          </li>
+        ))}
+      </ul>
+      <p>
+        <strong>In the app. </strong>
+        {tip.howToUse}
+      </p>
+    </>
   );
 }
 
@@ -599,6 +724,7 @@ function Setup({
   onTrials,
   onImport,
   onStart,
+  onOpenTips,
 }: {
   tracks: Track[];
   track: Track | null;
@@ -617,8 +743,10 @@ function Setup({
   onTrials: (n: number) => void;
   onImport: () => void;
   onStart: () => void;
+  onOpenTips: () => void;
 }) {
   const selected = codecs.find((item) => item.id === codec);
+  const tip = tipForTrack(track?.id);
   return (
     <div className="setup">
       <p className="eyebrow">New comparison</p>
@@ -632,6 +760,31 @@ function Setup({
         Suggested first listen: Jahzzar — Missing You, lossless vs 32 kbps MP3. The
         difference should be obvious; then try a higher bitrate or another track.
       </p>
+      {tip && (
+        <aside className="tip-card">
+          <div className="section-head">
+            <h2>What to listen for</h2>
+            <button type="button" className="link" onClick={onOpenTips}>
+              All tips
+            </button>
+          </div>
+          <p>
+            <strong>Stresses. </strong>
+            {tip.stresses}
+          </p>
+          <p>
+            <strong>Where. </strong>
+            {tip.listenWhere.map((cue, index) => (
+              <span key={cue.range}>
+                {index > 0 ? "; " : ""}
+                <span className="cue-range">{cue.range}</span>
+                {` ${cue.note}`}
+              </span>
+            ))}
+          </p>
+          <p className="hint">{tip.howToUse}</p>
+        </aside>
+      )}
 
       <div className="field">
         <span>Track</span>

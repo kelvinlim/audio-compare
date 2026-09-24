@@ -1,0 +1,196 @@
+{
+  "general": {
+    "title": "How to listen",
+    "paragraphs": [
+      "The app already level-matches and time-aligns A and B. You are listening for codec damage, not loudness or delay. Use headphones; open-backs in the Sundara class make air and cymbals easier, but any honest pair is fine.",
+      "Start at 32 or 64 kbps MP3 if you have not done this before — the damage is obvious. Then step to 96 kbps. That is the interesting test. 128 kbps is often subtle; treat a “maybe” as a maybe and switch to Blind ABX.",
+      "Loop a short region (5–15 seconds) and flip A/B on the same playhead. Long unbroken listens cause fatigue and false confidence. If your ears feel dull, stop. The clock on the player is MM:SS — seek to the cue, then loop by ear with ← →."
+    ]
+  },
+  "generic": {
+    "title": "Imported file",
+    "stresses": "Whatever is sharp, noisy, or very quiet in your recording — attacks, cymbals, applause, reverb tails, or hiss.",
+    "lossyDoes": "At 64–128 kbps, attacks soften or grow a pre-echo smear, air goes dull or fizzy, and a quiet noise floor can warble.",
+    "listenWhere": [
+      {
+        "range": "your choice",
+        "note": "Pick a 8–12 s loop with transients or audible air. Skip long held notes with nothing around them."
+      }
+    ],
+    "howToUse": "Same as bundled clips: short A/B loops, headphones, start obvious (64 kbps) then try 96."
+  },
+  "tracks": {
+    "goldberg-aria": {
+      "title": "Bach — Goldberg Aria",
+      "stresses": "Isolated piano hammers and the quiet harmonic decay after each note. Almost no drums or mix to hide damage.",
+      "lossyDoes": "Hammers lose a bit of click; the sustain can turn grainy or “swishy,” and the space between notes fills with a faint warble.",
+      "listenWhere": [
+        {
+          "range": "0:00–0:08",
+          "note": "First notes: clean attacks and long tails. High relative 96 kbps residual on this opening."
+        },
+        {
+          "range": "0:47–0:55",
+          "note": "Louder phrase; one of the two largest mid-clip residuals versus 96 kbps MP3."
+        },
+        {
+          "range": "2:41–2:49",
+          "note": "Same kind of writing later in the Aria — the other mid-clip residual peak."
+        }
+      ],
+      "howToUse": "Loop one 8 s phrase. A/B on a single hammer, then sit on the decay. If 96 kbps feels identical, you are not failing — solo piano often is close at that rate."
+    },
+    "goldberg-variatio-1": {
+      "title": "Bach — Goldberg Variatio 1",
+      "stresses": "Faster two-part piano writing: many closely spaced attacks and crossing lines.",
+      "lossyDoes": "Pre-echo smear just before notes, inner-voice muddle, and a slightly softer top on the loudest peaks.",
+      "listenWhere": [
+        {
+          "range": "0:10–0:18",
+          "note": "Early figuration — highest relative 96 kbps residual in the first half."
+        },
+        {
+          "range": "1:16–1:24",
+          "note": "Busiest stretch (also among the loudest). Largest absolute residual versus 96 kbps MP3."
+        }
+      ],
+      "howToUse": "Loop 1:16–1:24 and ask whether both hands stay distinct. Then try the calmer 0:10 passage to hear smear without the extra level."
+    },
+    "beethoven-op18-6-i": {
+      "title": "Beethoven — Quartet Op. 18/6, I",
+      "stresses": "Bow noise, ensemble attacks, and inner voices that sit under the first violin.",
+      "lossyDoes": "Rosiny air on the bows dulls; tutti chords smear; quiet inner lines can go watery.",
+      "listenWhere": [
+        {
+          "range": "1:28–1:36",
+          "note": "First dense tutti — loudest 8 s in the clip and a top absolute residual versus 96 kbps MP3."
+        },
+        {
+          "range": "4:19–4:31",
+          "note": "Later high-energy passage. Highest relative residual in the movement; more bow/air than the opening."
+        }
+      ],
+      "howToUse": "Loop a tutti, then a bar or two after it when the texture thins. Listen for the viola/second violin, not just the tune."
+    },
+    "njhb-checking-for-traps": {
+      "title": "NJHB — Checking For Traps",
+      "stresses": "Cymbals and brushes, trumpet attacks, vibes, and a full combo competing for bits.",
+      "lossyDoes": "Cymbal air turns fizzy or dull, trumpet fronts soften, and the ride pattern blurs into the mix.",
+      "listenWhere": [
+        {
+          "range": "0:00–0:08",
+          "note": "Opening has the most high-frequency energy in the excerpt (cymbal/brush air)."
+        },
+        {
+          "range": "0:24–0:32",
+          "note": "Loudest combo stretch and a top absolute 96 kbps residual."
+        },
+        {
+          "range": "0:51–1:04",
+          "note": "Another high-residual chorus — good second loop if the intro feels too thin."
+        }
+      ],
+      "howToUse": "Loop the intro and listen only to the metal. Then jump to 0:24 and A/B the trumpet front. 96 kbps is the useful step after 64 sounds easy."
+    },
+    "jahzzar-missing-you": {
+      "title": "Jahzzar — Missing You",
+      "stresses": "Synth/noise air and a dense layered pop mix. This is the default “easy to hear” track for a reason.",
+      "lossyDoes": "The airy bed warbles or goes dull; the chorus congests; hi-hat/noise texture is the first thing to collapse.",
+      "listenWhere": [
+        {
+          "range": "0:36–0:53",
+          "note": "Standout cue: very high >8 kHz energy and the highest relative 96 kbps residual in the song (the codec eats the air)."
+        },
+        {
+          "range": "2:06–2:18",
+          "note": "Loudest full-mix chorus — largest absolute residual. Good for congestion rather than hush."
+        }
+      ],
+      "howToUse": "The setup default (32 kbps MP3) should be obvious. Then loop 0:36–0:50 at 96 kbps. If you can still hear the air change, try Blind ABX."
+    },
+    "applause-large-hall": {
+      "title": "Applause — Large hall",
+      "stresses": "Dense unpitched clap transients plus a reverberant noise floor. Built as a codec-stress texture, not a song.",
+      "lossyDoes": "Claps smear into a swish, the hall noise warbles or “breathes,” and the stereo image can collapse. Pre-echo is common.",
+      "listenWhere": [
+        {
+          "range": "0:03–0:13",
+          "note": "Densest continuous clapping — highest absolute 96 kbps residual."
+        },
+        {
+          "range": "0:28–0:38",
+          "note": "Texture thins; relative error goes up and the high band stays busy. Easier to hear the noise floor warble."
+        }
+      ],
+      "howToUse": "Loop 0:03–0:13. This one is often obvious at 96 kbps. If it is, step to 128 and see when the swish disappears."
+    },
+    "guitar-satie-gymnopedie-1": {
+      "title": "Satie — Gymnopédie No. 1",
+      "stresses": "Fingerstyle pluck attacks, nail/string buzz, and a long quiet decay with room air.",
+      "lossyDoes": "Plucks lose their click, decays go grainy, and the faint buzz/air after the note disappears.",
+      "listenWhere": [
+        {
+          "range": "0:00–0:16",
+          "note": "Opening arpeggio — brightest high-frequency content in the performance."
+        },
+        {
+          "range": "0:54–1:02",
+          "note": "Another high-residual phrase if you want a mid-piece loop."
+        },
+        {
+          "range": "2:29–2:39",
+          "note": "Louder closing phrases — largest absolute 96 kbps residual."
+        }
+      ],
+      "howToUse": "Loop the first 16 s. A/B on one pluck, then let the decay run. Soft guitar is easy to miss at 96 kbps; give the tail time."
+    },
+    "transients": {
+      "title": "Transients",
+      "stresses": "Isolated clicks with silence between them. Designed to show pre-echo.",
+      "lossyDoes": "A faint whoosh or double-hit appears before the click, and the click itself gets fatter.",
+      "listenWhere": [
+        {
+          "range": "throughout",
+          "note": "Clicks are placed at about 0:00.4, 0:01.1, 0:01.8, 0:02.9, and so on through 0:22.7."
+        },
+        {
+          "range": "0:14–0:22",
+          "note": "Largest 96 kbps residual window. Brightest individual clicks near 0:07 and 0:18."
+        }
+      ],
+      "howToUse": "Loop 0:14–0:22 and listen *before* each click. If you only hear the hit, you are listening too late."
+    },
+    "harmonics": {
+      "title": "Harmonic study",
+      "stresses": "Stacked harmonic tones and their decay — especially the higher notes.",
+      "lossyDoes": "Upper harmonics dull; decays warble or lose pitch focus.",
+      "listenWhere": [
+        {
+          "range": "0:14–0:20",
+          "note": "High stacked note (around 0:14.6) is the largest 96 kbps residual. The next tone at 0:16 sits in the same window."
+        },
+        {
+          "range": "throughout",
+          "note": "24 s total. Any sustain after an attack is fair game if the high note feels too brief."
+        }
+      ],
+      "howToUse": "Loop 0:14–0:20 and listen to the top of the chord, not the fundamental. Short loop, a few A/B flips, then stop."
+    },
+    "dense-mix": {
+      "title": "Dense mix",
+      "stresses": "Pad, kick, hats, and a little noise at once — masking versus exposed cymbal ticks.",
+      "lossyDoes": "Hats lose fizz, pad edges smear, and the kick stays while the top end dulls.",
+      "listenWhere": [
+        {
+          "range": "throughout",
+          "note": "The texture is continuous for 24 s. Residual versus 96 kbps MP3 is fairly even."
+        },
+        {
+          "range": "0:04–0:12",
+          "note": "Hats/noise are more exposed against a quieter pad (higher relative residual). 0:15–0:23 is a similar stretch."
+        }
+      ],
+      "howToUse": "Loop either 8 s region and lock onto the hat tick. Ignore the kick; it usually survives."
+    }
+  }
+}
