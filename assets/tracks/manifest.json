@@ -35,6 +35,20 @@
     "license": "CC BY-SA · Jahzzar, Kuddelmuddel, 2015"
   },
   {
+    "id": "applause-large-hall",
+    "title": "Applause — Large hall",
+    "file": "applause-large-hall.flac",
+    "genre": "Crowd / applause",
+    "license": "CC0 · eXpl0it3r, 2019, 16-bit/44.1 kHz"
+  },
+  {
+    "id": "guitar-satie-gymnopedie-1",
+    "title": "Satie — Gymnopédie No. 1",
+    "file": "guitar-satie-gymnopedie-1.flac",
+    "genre": "Classical guitar",
+    "license": "CC BY-SA 4.0 · Michael Laucke, 2001"
+  },
+  {
     "id": "transients",
     "title": "Transients",
     "file": "transients.flac",

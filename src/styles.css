@@ -68,6 +68,12 @@ button {
   gap: 14px;
 }
 
+.header-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .brand {
   display: flex;
   align-items: baseline;
@@ -498,6 +504,76 @@ h3 {
 .about h2 {
   margin: 24px 0 10px;
   font-size: 1.1rem;
+  text-transform: none;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.sidebar-link {
+  display: inline-block;
+  margin: 0 0 10px;
+  font-size: 0.86rem;
+}
+
+.tip-card {
+  max-width: 40rem;
+  margin: 18px 0 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-raise);
+}
+
+.tip-card h2 {
+  font-size: 0.78rem;
+}
+
+.tip-card p {
+  margin: 8px 0 0;
+  line-height: 1.45;
+}
+
+.tip-block {
+  margin: 22px 0 0;
+  padding: 4px 0 8px;
+  border-top: 1px solid var(--line);
+}
+
+.tip-block.selected-tip {
+  border-top-color: #5a4520;
+}
+
+.tip-block p {
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.tip-block p strong,
+.tip-card p strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.cue-list {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.cue-list li {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr;
+  gap: 10px;
+  margin: 8px 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.cue-range {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.82rem;
+  color: var(--amber);
+  white-space: nowrap;
 }
 
 button.link {

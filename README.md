@@ -76,6 +76,8 @@ All recordings in `assets/tracks/` are open-licensed. Full attribution is in [`a
 | Beethoven, Op. 18 No. 6, I — Musopen String Quartet | 24-bit / 48 kHz | Public domain |
 | NJHB, Checking For Traps (2:30 excerpt) | Jazz combo, 16-bit / 44.1 kHz | CC BY 4.0 |
 | Jahzzar, Missing You | Indie / synth pop, 24-bit / 44.1 kHz | CC BY-SA |
+| Applause, large hall — eXpl0it3r | Crowd clapping texture, 16-bit / 44.1 kHz | CC0 |
+| Satie, Gymnopédie No. 1 — Michael Laucke | Classical fingerstyle guitar, 16-bit / 44.1 kHz | CC BY-SA 4.0 |
 | Transients, harmonics, dense mix | Generated diagnostics for pre-echo and smearing | CC0 |
 
 Import your own FLAC/WAV for anything else.
