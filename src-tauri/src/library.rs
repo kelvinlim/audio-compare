@@ -176,6 +176,7 @@ pub fn is_lossless_import(path: &Path) -> bool {
     )
 }
 
+#[allow(dead_code)]
 pub fn source_format_label(path: &Path) -> &'static str {
     match path
         .extension()
