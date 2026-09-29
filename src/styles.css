@@ -179,21 +179,6 @@ button {
   padding: 8px 12px;
 }
 
-.choice strong,
-.choice em {
-  display: block;
-  font-style: normal;
-}
-
-.choice em {
-  color: var(--muted);
-  font-size: 0.78rem;
-}
-
-.ghost-choice {
-  border-style: dashed;
-}
-
 .field.is-disabled {
   opacity: 0.45;
 }

@@ -456,7 +456,9 @@ export default function App() {
                 Import
               </button>
             </div>
-            <p className="hint">Bundled diagnostics plus your own FLAC or WAV.</p>
+            <p className="hint">
+              Select a track here. Bundled diagnostics plus your own FLAC or WAV.
+            </p>
             <button type="button" className="link sidebar-link" onClick={() => setPanel("tips")}>
               What to listen for
             </button>
@@ -499,7 +501,6 @@ export default function App() {
         <main className="main">
           {!inSession ? (
             <Setup
-              tracks={tracks}
               track={selectedTrack}
               codecs={codecOptions}
               codec={codec}
@@ -509,12 +510,10 @@ export default function App() {
               busy={busy}
               progress={progress}
               ffmpegReady={ffmpeg === null || Boolean(ffmpeg.available)}
-              onSelectTrack={setTrackId}
               onCodec={setCodec}
               onBitrate={setBitrate}
               onMode={setMode}
               onTrials={setTrialCount}
-              onImport={() => void importFile()}
               onStart={() => void start()}
               onOpenTips={() => setPanel("tips")}
             />
@@ -746,7 +745,6 @@ function TrackGroup({
 }
 
 function Setup({
-  tracks,
   track,
   codecs,
   codec,
@@ -756,16 +754,13 @@ function Setup({
   busy,
   progress,
   ffmpegReady,
-  onSelectTrack,
   onCodec,
   onBitrate,
   onMode,
   onTrials,
-  onImport,
   onStart,
   onOpenTips,
 }: {
-  tracks: Track[];
   track: Track | null;
   codecs: CodecOption[];
   codec: string;
@@ -775,12 +770,10 @@ function Setup({
   busy: boolean;
   progress: PrepareProgress | null;
   ffmpegReady: boolean;
-  onSelectTrack: (id: string) => void;
   onCodec: (id: string) => void;
   onBitrate: (rate: number) => void;
   onMode: (mode: SessionMode) => void;
   onTrials: (n: number) => void;
-  onImport: () => void;
   onStart: () => void;
   onOpenTips: () => void;
 }) {
@@ -795,33 +788,11 @@ function Setup({
         artifacts, not player differences or encoder delay.
       </p>
       <p className="hint">
-        Suggested first listen: Jahzzar — Missing You, lossless vs 32 kbps MP3. The
-        difference should be obvious; then try a higher bitrate or another track.
+        {track
+          ? "Suggested first listen: Jahzzar — Missing You, lossless vs 32 kbps MP3. The difference should be obvious; then try a higher bitrate or another track."
+          : "Select a track from the library on the left, or import a FLAC or WAV."}
       </p>
       <TrackTipCard trackId={track?.id} onOpenTips={onOpenTips} />
-
-      <div className="field">
-        <span>Track</span>
-        <div className="choices tracks">
-          {tracks.length === 0 && (
-            <p className="hint">No bundled tracks found yet. Import a FLAC or WAV.</p>
-          )}
-          {tracks.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={item.id === track?.id ? "choice on" : "choice"}
-              onClick={() => onSelectTrack(item.id)}
-            >
-              <strong>{item.title}</strong>
-              <em>{item.genre ?? item.source}</em>
-            </button>
-          ))}
-          <button type="button" className="choice ghost-choice" onClick={onImport}>
-            Import file…
-          </button>
-        </div>
-      </div>
 
       <div className="cards">
         <ChoiceRow
