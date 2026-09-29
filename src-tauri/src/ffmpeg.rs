@@ -287,4 +287,61 @@ mod tests {
             assert!(aligned > 1e-6, "{label} should still differ after align");
         }
     }
+
+    #[test]
+    fn wav_source_decodes_and_encodes_if_ffmpeg_present() {
+        let Some(ffmpeg) = super::find_ffmpeg() else {
+            return;
+        };
+        let dir = std::env::temp_dir().join("audio-compare-wav-source-test");
+        let _ = std::fs::create_dir_all(&dir);
+        let wav = dir.join("tone.wav");
+        write_sine_wav(&wav, 48_000, 0.4).expect("write wav");
+        let pcm = super::decode_pcm_f32(&ffmpeg, &wav, 48_000).expect("wav decode");
+        assert!(
+            pcm.len() >= 30_000,
+            "decoded WAV should cover ~0.4 s of stereo f32, got {}",
+            pcm.len()
+        );
+        let mp3 = dir.join("tone-128.mp3");
+        super::encode_lossy(&ffmpeg, &wav, &mp3, "mp3", 128).expect("wav to mp3");
+        let lossy = super::decode_pcm_f32(&ffmpeg, &mp3, 48_000).expect("mp3 from wav");
+        assert!(lossy.len() > 24_000);
+        let diff = crate::player::pcm_diff_rms(&pcm, &lossy);
+        assert!(diff > 1e-6, "lossy WAV encode should still differ from PCM");
+    }
+
+    fn write_sine_wav(
+        path: &std::path::Path,
+        sample_rate: u32,
+        seconds: f32,
+    ) -> std::io::Result<()> {
+        let frames = (seconds * sample_rate as f32) as usize;
+        let mut pcm = Vec::with_capacity(frames * 2);
+        for i in 0..frames {
+            let phase = i as f32 * 440.0 * 2.0 * std::f32::consts::PI / sample_rate as f32;
+            let sample = (phase.sin() * 0.3 * i16::MAX as f32) as i16;
+            pcm.push(sample);
+            pcm.push(sample);
+        }
+        let data_bytes = pcm.len() * 2;
+        let mut bytes = Vec::with_capacity(44 + data_bytes);
+        bytes.extend_from_slice(b"RIFF");
+        bytes.extend_from_slice(&(36u32 + data_bytes as u32).to_le_bytes());
+        bytes.extend_from_slice(b"WAVE");
+        bytes.extend_from_slice(b"fmt ");
+        bytes.extend_from_slice(&16u32.to_le_bytes());
+        bytes.extend_from_slice(&1u16.to_le_bytes());
+        bytes.extend_from_slice(&2u16.to_le_bytes());
+        bytes.extend_from_slice(&sample_rate.to_le_bytes());
+        bytes.extend_from_slice(&(sample_rate * 4).to_le_bytes());
+        bytes.extend_from_slice(&4u16.to_le_bytes());
+        bytes.extend_from_slice(&16u16.to_le_bytes());
+        bytes.extend_from_slice(b"data");
+        bytes.extend_from_slice(&(data_bytes as u32).to_le_bytes());
+        for sample in pcm {
+            bytes.extend_from_slice(&sample.to_le_bytes());
+        }
+        std::fs::write(path, bytes)
+    }
 }

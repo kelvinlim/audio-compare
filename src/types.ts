@@ -50,6 +50,8 @@ export interface PlayerStatus {
   unalignedDiffRms: number;
   lagFrames: number;
   lagMs: number;
+  loopStartSeconds: number | null;
+  loopEndSeconds: number | null;
 }
 
 export interface Trial {

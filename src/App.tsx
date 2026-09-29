@@ -5,7 +5,9 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import changelog from "../CHANGELOG.md?raw";
 import { api } from "./api";
-import { bundledTipOrder, listeningGuide, tipForTrack } from "./listeningTips";
+import { bundledTipOrder, cueIntervals, listeningGuide, parseCueRange, tipForTrack } from "./listeningTips";
+import type { CueInterval } from "./listeningTips";
+import { formatLoopRange, MIN_LOOP_SECONDS, Timeline, type LoopRegion } from "./Timeline";
 import type {
   CodecOption,
   DeviceInfo,
@@ -37,6 +39,20 @@ function formatLag(frames: number, ms: number): string {
   const frameLabel = frames > 0 ? `+${frames}` : `${frames}`;
   const msLabel = `${ms > 0 ? "+" : ""}${ms.toFixed(1)}`;
   return `lag ${frameLabel} smp / ${msLabel} ms (${side})`;
+}
+
+function sourceFormatLabel(path: string | undefined): string {
+  const ext = path?.split(".").pop()?.toLowerCase();
+  if (ext === "wav" || ext === "wave") {
+    return "WAV";
+  }
+  if (ext === "aiff" || ext === "aif") {
+    return "AIFF";
+  }
+  if (ext === "flac") {
+    return "FLAC";
+  }
+  return "Lossless";
 }
 
 function formatP(p: number): string {
@@ -71,6 +87,12 @@ const FALLBACK_CODECS: CodecOption[] = [
 const DEFAULT_TRACK_ID = "bundled:jahzzar-missing-you";
 const DEFAULT_CODEC = "mp3";
 const DEFAULT_BITRATE = 32;
+const PREPARE_CANCELLED = "prepare was cancelled";
+
+function isPrepareCancelled(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.includes(PREPARE_CANCELLED);
+}
 
 /** Arrow-key seek after scrubbing: ~2% of the track, clamped to 1–10s. */
 function seekStepSeconds(duration: number): number {
@@ -157,11 +179,17 @@ export default function App() {
   const [progress, setProgress] = useState<PrepareProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [panel, setPanel] = useState<null | "about" | "tips">(null);
+  const [loop, setLoop] = useState<LoopRegion | null>(null);
+  const [loopIn, setLoopIn] = useState<number | null>(null);
+  const [switchingTitle, setSwitchingTitle] = useState<string | null>(null);
   const positionRef = useRef(0);
   const durationRef = useRef(0);
   const ignorePollUntilRef = useRef(0);
   const busyRef = useRef(false);
+  const sessionRef = useRef<Session | null>(null);
+  const prepareGenRef = useRef(0);
   const appVersion = useAppVersion();
+  sessionRef.current = session;
 
   const tracks = useMemo(
     () => [...library.bundled, ...library.user],
@@ -284,57 +312,28 @@ export default function App() {
     setDeviceName(name);
     await api.setDevice(name);
     if (session && trackId) {
+      const restoreLoop = loop;
+      const gen = prepareGenRef.current;
       busyRef.current = true;
       setBusy(true);
       try {
         await api.prepareComparison(trackId, session.codec, session.bitrate);
+        if (gen !== prepareGenRef.current || !sessionRef.current) {
+          return;
+        }
+        if (restoreLoop) {
+          await api.setLoop(restoreLoop.start, restoreLoop.end);
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        if (gen === prepareGenRef.current && sessionRef.current && !isPrepareCancelled(err)) {
+          setError(err instanceof Error ? err.message : String(err));
+        }
       } finally {
-        busyRef.current = false;
-        setBusy(false);
+        if (gen === prepareGenRef.current) {
+          busyRef.current = false;
+          setBusy(false);
+        }
       }
-    }
-  };
-
-  const importFile = async () => {
-    setError(null);
-    const selected = await open({
-      multiple: false,
-      filters: [{ name: "Lossless audio", extensions: ["flac", "wav", "aiff", "aif"] }],
-    });
-    if (!selected || Array.isArray(selected)) {
-      return;
-    }
-    const track = await api.importTrack(selected);
-    await refresh();
-    setTrackId(track.id);
-  };
-
-  const start = async () => {
-    if (!trackId) {
-      setError("Pick a track first.");
-      return;
-    }
-    setError(null);
-    setPanel(null);
-    busyRef.current = true;
-    setBusy(true);
-    setProgress({ stage: "start", message: "Preparing comparison…" });
-    await yieldPaint();
-    try {
-      await api.prepareComparison(trackId, codec, bitrate);
-      const next = await api.startSession(trackId, codec, bitrate, mode, trialCount);
-      setSession(next);
-      setListenSource("a");
-      await api.setSource("a");
-      await api.play();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      busyRef.current = false;
-      setBusy(false);
-      setProgress(null);
     }
   };
 
@@ -351,6 +350,131 @@ export default function App() {
     );
     await api.seek(next);
   }, []);
+
+  const clearLoop = useCallback(async () => {
+    setLoop(null);
+    setLoopIn(null);
+    try {
+      await api.setLoop(null, null);
+    } catch {
+      // player may not be loaded yet
+    }
+  }, []);
+
+  const applyLoop = useCallback(
+    async (region: LoopRegion, seek: boolean) => {
+      if (region.end - region.start < MIN_LOOP_SECONDS) {
+        return;
+      }
+      setLoop(region);
+      setLoopIn(null);
+      await api.setLoop(region.start, region.end);
+      if (seek) {
+        await seekTo(region.start);
+      }
+    },
+    [seekTo],
+  );
+
+  const beginListening = async (nextTrackId: string) => {
+    if (!nextTrackId) {
+      setError("Pick a track first.");
+      return;
+    }
+    const gen = ++prepareGenRef.current;
+    setError(null);
+    setPanel(null);
+    busyRef.current = true;
+    setBusy(true);
+    const nextTitle = tracks.find((track) => track.id === nextTrackId)?.title;
+    setSwitchingTitle(nextTitle ?? null);
+    setProgress({
+      stage: "start",
+      message: nextTitle ? `Preparing ${nextTitle}…` : "Preparing comparison…",
+    });
+    try {
+      await api.invalidatePrepare();
+      await clearLoop();
+      await yieldPaint();
+      if (gen !== prepareGenRef.current) {
+        return;
+      }
+      if (sessionRef.current) {
+        await api.pause();
+        if (gen !== prepareGenRef.current) {
+          return;
+        }
+      }
+      await api.prepareComparison(nextTrackId, codec, bitrate);
+      if (gen !== prepareGenRef.current) {
+        return;
+      }
+      const next = await api.startSession(nextTrackId, codec, bitrate, mode, trialCount);
+      if (gen !== prepareGenRef.current) {
+        return;
+      }
+      setTrackId(nextTrackId);
+      setSession(next);
+      setListenSource("a");
+      await api.setSource("a");
+      if (gen !== prepareGenRef.current) {
+        await api.pause();
+        return;
+      }
+      await api.play();
+      if (gen !== prepareGenRef.current) {
+        await api.pause();
+        return;
+      }
+      setHistory(await api.listHistory());
+    } catch (err) {
+      if (gen === prepareGenRef.current && !isPrepareCancelled(err)) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    } finally {
+      if (gen === prepareGenRef.current) {
+        busyRef.current = false;
+        setBusy(false);
+        setProgress(null);
+        setSwitchingTitle(null);
+      }
+    }
+  };
+
+  const selectTrack = (id: string) => {
+    if (busyRef.current) {
+      return;
+    }
+    if (!sessionRef.current) {
+      setTrackId(id);
+      return;
+    }
+    if (id === trackId) {
+      return;
+    }
+    void beginListening(id);
+  };
+
+  const importFile = async () => {
+    if (busyRef.current) {
+      return;
+    }
+    setError(null);
+    const selected = await open({
+      multiple: false,
+      filters: [{ name: "Lossless audio", extensions: ["flac", "wav", "wave", "aiff", "aif"] }],
+    });
+    if (!selected || Array.isArray(selected)) {
+      return;
+    }
+    const track = await api.importTrack(selected);
+    await refresh();
+    selectTrack(track.id);
+  };
+
+  const start = async () => {
+    await beginListening(trackId);
+  };
 
   const switchSource = useCallback(async (source: "a" | "b" | "x") => {
     if (source === "x" && session?.mode !== "blind") {
@@ -395,14 +519,25 @@ export default function App() {
   }, [session]);
 
   const endSession = useCallback(async () => {
+    prepareGenRef.current += 1;
+    busyRef.current = false;
+    setBusy(false);
+    setProgress(null);
+    setSwitchingTitle(null);
+    try {
+      await api.invalidatePrepare();
+    } catch {
+      // Tear the session down even if the engine call fails.
+    }
     await api.pause();
+    await clearLoop();
     setSession(null);
     setPlayer(null);
     positionRef.current = 0;
     durationRef.current = 0;
     setListenSource("a");
     setHistory(await api.listHistory());
-  }, []);
+  }, [clearLoop]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -420,6 +555,9 @@ export default function App() {
       }
 
       if (!inSession || panel) {
+        return;
+      }
+      if (busy) {
         return;
       }
       if (isEditableTarget(event.target)) {
@@ -449,11 +587,44 @@ export default function App() {
         const step = seekStepSeconds(durationRef.current);
         const delta = event.key === "ArrowLeft" ? -step : step;
         void seekTo(positionRef.current + delta);
+      } else if (event.key === "[") {
+        event.preventDefault();
+        setLoopIn(positionRef.current);
+        if (loop) {
+          setLoop(null);
+          void api.setLoop(null, null);
+        }
+      } else if (event.key === "]") {
+        event.preventDefault();
+        const position = positionRef.current;
+        const startAt = loopIn ?? loop?.start ?? null;
+        if (startAt != null) {
+          const start = Math.min(startAt, position);
+          const end = Math.max(startAt, position);
+          void applyLoop({ start, end }, false);
+        }
+      } else if (key === "l") {
+        event.preventDefault();
+        void clearLoop();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [cycleSource, endSession, inSession, panel, seekTo, submitVote, switchSource, togglePlay]);
+  }, [
+    applyLoop,
+    busy,
+    clearLoop,
+    cycleSource,
+    endSession,
+    inSession,
+    loop,
+    loopIn,
+    panel,
+    seekTo,
+    submitVote,
+    switchSource,
+    togglePlay,
+  ]);
 
   return (
     <div className={`app${busy ? " is-preparing" : ""}`} aria-busy={busy}>
@@ -528,12 +699,13 @@ export default function App() {
           <section>
             <div className="section-head">
               <h2>Library</h2>
-              <button type="button" className="ghost" onClick={() => void importFile()}>
+              <button type="button" className="ghost" disabled={busy} onClick={() => void importFile()}>
                 Import
               </button>
             </div>
             <p className="hint">
               Select a track here. Bundled diagnostics plus your own FLAC or WAV.
+              {inSession ? " Click another track to restart with that source." : ""}
             </p>
             <button type="button" className="link sidebar-link" onClick={() => setPanel("tips")}>
               What to listen for
@@ -542,15 +714,15 @@ export default function App() {
               label="Bundled"
               tracks={library.bundled}
               selectedId={trackId}
-              disabled={inSession || busy}
-              onSelect={setTrackId}
+              disabled={busy}
+              onSelect={selectTrack}
             />
             <TrackGroup
               label="Your files"
               tracks={library.user}
               selectedId={trackId}
-              disabled={inSession || busy}
-              onSelect={setTrackId}
+              disabled={busy}
+              onSelect={selectTrack}
             />
           </section>
           <section className="history">
@@ -597,9 +769,41 @@ export default function App() {
               player={player}
               listenSource={listenSource}
               codecs={codecOptions}
+              busy={busy}
+              progress={progress}
+              switchingTitle={switchingTitle}
+              sourceLabel={sourceFormatLabel(
+                tracks.find((track) => track.id === session.trackId)?.path,
+              )}
+              cues={cueIntervals(session.trackId)}
+              loop={loop}
+              loopIn={loopIn}
               onSource={(source) => void switchSource(source)}
               onPlay={() => void togglePlay()}
               onSeek={(seconds) => void seekTo(seconds)}
+              onLoop={(region) => void applyLoop(region, true)}
+              onLoopCue={(cue) => void applyLoop({ start: cue.start, end: cue.end }, true)}
+              onLoopIn={() => {
+                setLoopIn(positionRef.current);
+                if (loop) {
+                  setLoop(null);
+                  void api.setLoop(null, null);
+                }
+              }}
+              onLoopOut={() => {
+                const position = positionRef.current;
+                const startAt = loopIn ?? loop?.start ?? null;
+                if (startAt != null) {
+                  void applyLoop(
+                    {
+                      start: Math.min(startAt, position),
+                      end: Math.max(startAt, position),
+                    },
+                    false,
+                  );
+                }
+              }}
+              onClearLoop={() => void clearLoop()}
               onVote={(choice) => void submitVote(choice)}
               onEnd={() => void endSession()}
               onOpenTips={() => setPanel("tips")}
@@ -708,7 +912,13 @@ function ListeningTips({
   );
 }
 
-function TrackTipBody({ tip }: { tip: NonNullable<ReturnType<typeof tipForTrack>> }) {
+function TrackTipBody({
+  tip,
+  onCueClick,
+}: {
+  tip: NonNullable<ReturnType<typeof tipForTrack>>;
+  onCueClick?: (cue: CueInterval) => void;
+}) {
   return (
     <>
       <h2>{tip.title}</h2>
@@ -724,12 +934,25 @@ function TrackTipBody({ tip }: { tip: NonNullable<ReturnType<typeof tipForTrack>
         <strong>Where to listen.</strong>
       </p>
       <ul className="cue-list">
-        {tip.listenWhere.map((cue) => (
-          <li key={`${cue.range}-${cue.note.slice(0, 24)}`}>
-            <span className="cue-range">{cue.range}</span>
-            <span>{cue.note}</span>
-          </li>
-        ))}
+        {tip.listenWhere.map((cue) => {
+          const interval = parseCueRange(cue.range);
+          return (
+            <li key={`${cue.range}-${cue.note.slice(0, 24)}`}>
+              {onCueClick && interval ? (
+                <button
+                  type="button"
+                  className="cue-range cue-jump"
+                  onClick={() => onCueClick({ ...interval, range: cue.range, note: cue.note })}
+                >
+                  {cue.range}
+                </button>
+              ) : (
+                <span className="cue-range">{cue.range}</span>
+              )}
+              <span>{cue.note}</span>
+            </li>
+          );
+        })}
       </ul>
       <p>
         <strong>In the app. </strong>
@@ -742,9 +965,11 @@ function TrackTipBody({ tip }: { tip: NonNullable<ReturnType<typeof tipForTrack>
 function TrackTipCard({
   trackId,
   onOpenTips,
+  onCueClick,
 }: {
   trackId: string | null | undefined;
   onOpenTips: () => void;
+  onCueClick?: (cue: CueInterval) => void;
 }) {
   const tip = tipForTrack(trackId);
   if (!tip) {
@@ -764,15 +989,32 @@ function TrackTipCard({
       </p>
       <p>
         <strong>Where. </strong>
-        {tip.listenWhere.map((cue, index) => (
-          <span key={cue.range}>
-            {index > 0 ? "; " : ""}
-            <span className="cue-range">{cue.range}</span>
-            {` ${cue.note}`}
-          </span>
-        ))}
+        {tip.listenWhere.map((cue, index) => {
+          const interval = parseCueRange(cue.range);
+          return (
+            <span key={cue.range}>
+              {index > 0 ? "; " : ""}
+              {onCueClick && interval ? (
+                <button
+                  type="button"
+                  className="cue-range cue-jump"
+                  onClick={() => onCueClick({ ...interval, range: cue.range, note: cue.note })}
+                >
+                  {cue.range}
+                </button>
+              ) : (
+                <span className="cue-range">{cue.range}</span>
+              )}
+              {` ${cue.note}`}
+            </span>
+          );
+        })}
       </p>
-      <p className="hint">{tip.howToUse}</p>
+      <p className="hint">
+        {onCueClick
+          ? "Click a cue time to loop that region. Drag the timeline for a custom loop."
+          : tip.howToUse}
+      </p>
     </aside>
   );
 }
@@ -805,7 +1047,8 @@ function TrackGroup({
             >
               <span className="title">{track.title}</span>
               <span className="meta">
-                {track.genre ?? track.license ?? "Lossless"}
+                {track.genre ?? track.license ?? sourceFormatLabel(track.path)}
+                {track.source === "user" ? ` · ${sourceFormatLabel(track.path)}` : ""}
                 {track.durationSeconds
                   ? ` · ${formatTime(track.durationSeconds)}`
                   : ""}
@@ -1024,9 +1267,21 @@ function Player({
   player,
   listenSource,
   codecs,
+  busy,
+  progress,
+  switchingTitle,
+  sourceLabel,
+  cues,
+  loop,
+  loopIn,
   onSource,
   onPlay,
   onSeek,
+  onLoop,
+  onLoopCue,
+  onLoopIn,
+  onLoopOut,
+  onClearLoop,
   onVote,
   onEnd,
   onOpenTips,
@@ -1035,9 +1290,21 @@ function Player({
   player: PlayerStatus | null;
   listenSource: "a" | "b" | "x";
   codecs: CodecOption[];
+  busy: boolean;
+  progress: PrepareProgress | null;
+  switchingTitle: string | null;
+  sourceLabel: string;
+  cues: CueInterval[];
+  loop: LoopRegion | null;
+  loopIn: number | null;
   onSource: (source: "a" | "b" | "x") => void;
   onPlay: () => void;
   onSeek: (seconds: number) => void;
+  onLoop: (region: LoopRegion) => void;
+  onLoopCue: (cue: CueInterval) => void;
+  onLoopIn: () => void;
+  onLoopOut: () => void;
+  onClearLoop: () => void;
   onVote: (choice: "a" | "b") => void;
   onEnd: () => void;
   onOpenTips: () => void;
@@ -1047,18 +1314,25 @@ function Player({
   const open = session.mode === "open";
   const answered = session.currentTrial;
   const remaining = Math.max(0, session.trialCount - answered);
+  const aCaption = open ? sourceLabel : "Reference A";
 
   return (
-    <div className="player">
+    <div className={`player${busy ? " is-busy" : ""}`}>
       <div className="player-head">
         <div>
           <p className="eyebrow">
             {open ? "Open A/B" : "Blind ABX"} · {codecLabel(codecs, session.codec)}{" "}
             {session.bitrate} kbps
           </p>
-          <h1>{session.trackTitle}</h1>
+          <h1>{switchingTitle ?? session.trackTitle}</h1>
+          {busy && (
+            <p className="prepare-status" role="status" aria-live="polite">
+              <span className="spinner" aria-hidden="true" />
+              {progress?.message ?? "Preparing comparison…"}
+            </p>
+          )}
         </div>
-        <button type="button" className="ghost" onClick={onEnd}>
+        <button type="button" className="ghost" onClick={onEnd} disabled={busy}>
           End session
         </button>
       </div>
@@ -1066,14 +1340,16 @@ function Player({
       <div className="pads">
         <SourcePad
           letter="A"
-          caption={open ? "Lossless" : "Reference A"}
+          caption={aCaption}
           active={listenSource === "a"}
+          disabled={busy}
           onClick={() => onSource("a")}
         />
         <SourcePad
           letter="B"
           caption={open ? `${session.codec.toUpperCase()} ${session.bitrate}` : "Reference B"}
           active={listenSource === "b"}
+          disabled={busy}
           onClick={() => onSource("b")}
         />
         {!open && (
@@ -1081,6 +1357,7 @@ function Player({
             letter="X"
             caption="Mystery"
             active={listenSource === "x"}
+            disabled={busy}
             onClick={() => onSource("x")}
           />
         )}
@@ -1088,7 +1365,7 @@ function Player({
 
       <p className="engine">
         {open
-          ? `Now playing ${player?.source === "b" ? `${session.codec.toUpperCase()} ${session.bitrate}` : "lossless"} (buffer ${player?.source.toUpperCase() ?? "—"})`
+          ? `Now playing ${player?.source === "b" ? `${session.codec.toUpperCase()} ${session.bitrate}` : sourceLabel} (buffer ${player?.source.toUpperCase() ?? "—"})`
           : `Now playing ${listenSource.toUpperCase()} · engine is reading buffer ${listenSource === "x" ? "X" : (player?.source?.toUpperCase() ?? "—")}`}
         {player && (
           <>
@@ -1113,37 +1390,66 @@ function Player({
           type="button"
           className="play"
           onClick={onPlay}
+          disabled={busy}
           aria-label={player?.playing ? "Pause" : "Play"}
           title={player?.playing ? "Pause" : "Play"}
         >
           <PlayPauseIcon playing={Boolean(player?.playing)} />
         </button>
-        <input
-          type="range"
-          min={0}
-          max={Math.max(duration, 0.01)}
-          step={0.01}
-          value={Math.min(position, duration || 0)}
-          aria-label="Playback position"
-          onChange={(event) => onSeek(Number(event.target.value))}
-          onPointerUp={(event) => event.currentTarget.blur()}
-          onKeyDown={(event) => {
-            if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-              event.preventDefault();
-            }
-          }}
+        <Timeline
+          duration={duration}
+          position={position}
+          cues={cues}
+          loop={loop}
+          disabled={busy}
+          onSeek={onSeek}
+          onLoop={onLoop}
         />
         <span className="clock">
           {formatTime(position)} / {formatTime(duration)}
         </span>
       </div>
 
+      <div className="loop-bar">
+        {loop ? (
+          <>
+            <span>
+              Looping {formatLoopRange(loop)}
+            </span>
+            <button type="button" className="ghost" onClick={onClearLoop} disabled={busy}>
+              Clear loop
+            </button>
+          </>
+        ) : (
+          <>
+            <span>
+              {loopIn != null
+                ? `Loop in ${formatTime(loopIn)} — press Loop out or ]`
+                : "Drag the timeline to loop, or click a cue time"}
+            </span>
+            <button
+              type="button"
+              className="ghost"
+              disabled={busy}
+              onClick={loopIn != null ? onLoopOut : onLoopIn}
+            >
+              {loopIn != null ? "Loop out" : "Loop in"}
+            </button>
+          </>
+        )}
+      </div>
+
       <p className="keys">
         A / B{open ? "" : " / X"} switch · Tab cycle · Space play · Esc end · ← → seek
+        · [ ] loop in/out · L clear
         {open ? "" : " · 1 / 2 vote X is A or B"}
       </p>
 
-      <TrackTipCard trackId={session.trackId} onOpenTips={onOpenTips} />
+      <TrackTipCard
+        trackId={session.trackId}
+        onOpenTips={onOpenTips}
+        onCueClick={busy ? undefined : onLoopCue}
+      />
 
       {!open && (
         <div className="scoreboard">
@@ -1162,10 +1468,10 @@ function Player({
             <div>
               <h2>Is X the same as A or B?</h2>
               <div className="vote-row">
-                <button type="button" onClick={() => onVote("a")}>
+                <button type="button" onClick={() => onVote("a")} disabled={busy}>
                   X is A
                 </button>
-                <button type="button" onClick={() => onVote("b")}>
+                <button type="button" onClick={() => onVote("b")} disabled={busy}>
                   X is B
                 </button>
               </div>
@@ -1227,17 +1533,20 @@ function SourcePad({
   letter,
   caption,
   active,
+  disabled,
   onClick,
 }: {
   letter: string;
   caption: string;
   active: boolean;
+  disabled?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       className={`pad pad-${letter.toLowerCase()} ${active ? "active" : ""}`}
+      disabled={disabled}
       onClick={onClick}
     >
       <span className="letter">{letter}</span>

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Switching library tracks (or Import) during a session restarts listening with that source
+- Highlight listening-tip cue regions on the player timeline
+- Loop a selected region: drag the timeline, click a cue time, or use `[` / `]` (L clears)
+- Play imported WAV files as the lossless A source, same path as FLAC
+
 ## 0.4.3 — 2026-09-24
 
 - Show the compact “What to listen for” tip card under the player during Open A/B and Blind ABX (same card as Setup, with an All tips link)

@@ -127,12 +127,7 @@ pub fn import_user_track(
     if !file_path.exists() {
         return Err(AppError::msg("file does not exist"));
     }
-    let ext = file_path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("")
-        .to_ascii_lowercase();
-    if !matches!(ext.as_str(), "flac" | "wav" | "aiff" | "aif") {
+    if !is_lossless_import(file_path) {
         return Err(AppError::msg(
             "please import a lossless file (FLAC, WAV, or AIFF)",
         ));
@@ -170,6 +165,33 @@ pub fn import_user_track(
     Ok(track)
 }
 
+pub fn is_lossless_import(path: &Path) -> bool {
+    matches!(
+        path.extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase()
+            .as_str(),
+        "flac" | "wav" | "wave" | "aiff" | "aif"
+    )
+}
+
+#[allow(dead_code)]
+pub fn source_format_label(path: &Path) -> &'static str {
+    match path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "wav" | "wave" => "WAV",
+        "aiff" | "aif" => "AIFF",
+        "flac" => "FLAC",
+        _ => "Lossless",
+    }
+}
+
 pub fn find_track(app: &AppHandle, data_dir: &Path, id: &str) -> AppResult<Track> {
     let library = load_library(app, data_dir, None)?;
     library
@@ -178,4 +200,24 @@ pub fn find_track(app: &AppHandle, data_dir: &Path, id: &str) -> AppResult<Track
         .chain(library.user)
         .find(|track| track.id == id)
         .ok_or_else(|| AppError::msg("track not found"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_lossless_import, source_format_label};
+    use std::path::Path;
+
+    #[test]
+    fn accepts_wav_and_wave_imports() {
+        assert!(is_lossless_import(Path::new("clip.WAV")));
+        assert!(is_lossless_import(Path::new("clip.wave")));
+        assert!(is_lossless_import(Path::new("clip.flac")));
+        assert!(!is_lossless_import(Path::new("clip.mp3")));
+    }
+
+    #[test]
+    fn labels_wav_as_wav() {
+        assert_eq!(source_format_label(Path::new("/tmp/take.wav")), "WAV");
+        assert_eq!(source_format_label(Path::new("/tmp/take.FLAC")), "FLAC");
+    }
 }

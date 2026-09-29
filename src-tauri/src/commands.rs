@@ -108,7 +108,9 @@ pub async fn prepare_comparison(
     let cache_dir = state.cache_dir.clone();
     let player = state.player.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        run_prepare(app, &data_dir, &cache_dir, &player, track_id, codec, bitrate)
+        run_prepare(
+            app, &data_dir, &cache_dir, &player, track_id, codec, bitrate,
+        )
     })
     .await
     .map_err(|err| err.to_string())?
@@ -126,7 +128,7 @@ fn run_prepare(
     // Prepare runs off the IPC thread, so Output would otherwise stay live.
     // Hold this until after load() so a device change cannot decode at one
     // rate and play at another.
-    let _prepare = player.lock_prepare();
+    let prepare = player.lock_prepare();
     let track = library::find_track(&app, data_dir, &track_id)?;
     let ffmpeg_bin = ffmpeg::require_ffmpeg()?;
     let source = PathBuf::from(&track.path);
@@ -155,7 +157,7 @@ fn run_prepare(
     }
 
     emit_progress(&app, "align", "Time-aligning A and B…");
-    let loaded = player.load(pcm_a, pcm_b, sample_rate)?;
+    let loaded = player.load(pcm_a, pcm_b, sample_rate, prepare.generation())?;
     emit_progress(&app, "ready", "Ready to listen");
 
     Ok(PrepareInfo {
@@ -171,6 +173,12 @@ fn run_prepare(
 }
 
 #[tauri::command]
+pub fn invalidate_prepare(state: State<AppState>) -> Result<(), String> {
+    state.player.invalidate_prepare();
+    Ok(())
+}
+
+#[tauri::command]
 pub fn player_play(state: State<AppState>) -> Result<(), String> {
     state.player.play().map_err(Into::into)
 }
@@ -183,6 +191,15 @@ pub fn player_pause(state: State<AppState>) -> Result<(), String> {
 #[tauri::command]
 pub fn player_seek(state: State<AppState>, seconds: f64) -> Result<(), String> {
     state.player.seek(seconds).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn player_set_loop(
+    state: State<AppState>,
+    start: Option<f64>,
+    end: Option<f64>,
+) -> Result<(), String> {
+    state.player.set_loop(start, end).map_err(Into::into)
 }
 
 #[derive(Debug, Clone, Serialize)]

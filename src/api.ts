@@ -23,9 +23,12 @@ export const api = {
   importTrack: (path: string) => invoke<Track>("import_track", { path }),
   prepareComparison: (trackId: string, codec: string, bitrate: number) =>
     invoke<PrepareInfo>("prepare_comparison", { trackId, codec, bitrate }),
+  invalidatePrepare: () => invoke<void>("invalidate_prepare"),
   play: () => invoke<void>("player_play"),
   pause: () => invoke<void>("player_pause"),
   seek: (seconds: number) => invoke<void>("player_seek", { seconds }),
+  setLoop: (start: number | null, end: number | null) =>
+    invoke<void>("player_set_loop", { start, end }),
   setSource: (source: "a" | "b" | "x") =>
     invoke<SourceSwitch>("player_set_source", { source }),
   playerStatus: () => invoke<PlayerStatus>("player_status"),
