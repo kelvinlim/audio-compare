@@ -48,6 +48,7 @@ pub fn run() {
             commands::player_play,
             commands::player_pause,
             commands::player_seek,
+            commands::player_set_loop,
             commands::player_set_source,
             commands::player_status,
             commands::start_session,

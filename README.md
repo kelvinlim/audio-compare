@@ -13,7 +13,8 @@ Built with [Tauri 2](https://tauri.app/), React, and Rust. Playback is raw PCM t
 - **Matched playback** — both sides decode to the same PCM format at the output device rate and are time-aligned (bounded cross-correlation, ±100 ms) so encoder delay does not shift the playhead.
 - **Instant A / B / X** — same playhead, no restart.
 - **Output device picker** — including system default.
-- **Bundled open-licensed tracks** plus import of your own FLAC/WAV.
+- **Bundled open-licensed tracks** plus import of your own FLAC/WAV (WAV plays as the lossless A source).
+- **Cue highlights and A–B loop** — tip regions mark the timeline; drag or `[` / `]` to loop a slice.
 - **Encode cache** — a given source + codec + bitrate is encoded once.
 
 ### Codecs
@@ -53,7 +54,7 @@ The setup screen defaults to **Jahzzar — Missing You** vs **32 kbps MP3** in *
 
 1. Pick a bundled track or import FLAC/WAV from the library (left sidebar). First listen: Missing You, lossless vs 32 kbps MP3.
 2. Choose codec, bitrate, and **Open A/B** or **Blind ABX**.
-3. Play. Switch with the pads or the keyboard. The playhead stays put.
+3. Play. Switch with the pads or the keyboard. The playhead stays put. Click another library track anytime to restart with that source (same codec, bitrate, and mode).
 
 | Key | Action |
 | --- | --- |
@@ -63,6 +64,10 @@ The setup screen defaults to **Jahzzar — Missing You** vs **32 kbps MP3** in *
 | Esc | End session (closes About or the output menu first) |
 | `1` / `2` | Vote X is A or B (blind) |
 | ← → | Seek |
+| `[` `]` | Loop in / loop out at the playhead |
+| `L` | Clear the loop |
+
+Amber marks on the timeline are listening-tip cue regions. Click a cue time in the tip card (or drag across the timeline) to loop that slice; **Clear loop** or `L` turns looping off. Blind ABX trials in progress are abandoned if you switch tracks mid-session.
 
 In blind mode the UI does not reveal whether X is A or B. A sounding like X on some trials is expected.
 

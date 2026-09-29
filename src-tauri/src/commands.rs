@@ -108,7 +108,9 @@ pub async fn prepare_comparison(
     let cache_dir = state.cache_dir.clone();
     let player = state.player.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        run_prepare(app, &data_dir, &cache_dir, &player, track_id, codec, bitrate)
+        run_prepare(
+            app, &data_dir, &cache_dir, &player, track_id, codec, bitrate,
+        )
     })
     .await
     .map_err(|err| err.to_string())?
@@ -183,6 +185,15 @@ pub fn player_pause(state: State<AppState>) -> Result<(), String> {
 #[tauri::command]
 pub fn player_seek(state: State<AppState>, seconds: f64) -> Result<(), String> {
     state.player.seek(seconds).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn player_set_loop(
+    state: State<AppState>,
+    start: Option<f64>,
+    end: Option<f64>,
+) -> Result<(), String> {
+    state.player.set_loop(start, end).map_err(Into::into)
 }
 
 #[derive(Debug, Clone, Serialize)]

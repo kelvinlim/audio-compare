@@ -4,7 +4,7 @@
     "paragraphs": [
       "The app already level-matches and time-aligns A and B. You are listening for codec damage, not loudness or delay. Use headphones; open-backs in the Sundara class make air and cymbals easier, but any honest pair is fine.",
       "Start at 32 or 64 kbps MP3 if you have not done this before — the damage is obvious. Then step to 96 kbps. That is the interesting test. 128 kbps is often subtle; treat a “maybe” as a maybe and switch to Blind ABX.",
-      "Loop a short region (5–15 seconds) and flip A/B on the same playhead. Long unbroken listens cause fatigue and false confidence. If your ears feel dull, stop. The clock on the player is MM:SS — seek to the cue, then loop by ear with ← →."
+      "Loop a short region (5–15 seconds) and flip A/B on the same playhead. Long unbroken listens cause fatigue and false confidence. If your ears feel dull, stop. Drag the timeline to loop, click a highlighted cue time, or use [ and ] for in/out (L clears)."
     ]
   },
   "generic": {

@@ -54,6 +54,8 @@ pub struct PlayerStatus {
     pub unaligned_diff_rms: f64,
     pub lag_frames: i32,
     pub lag_ms: f64,
+    pub loop_start_seconds: Option<f64>,
+    pub loop_end_seconds: Option<f64>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -82,6 +84,8 @@ struct Shared {
     diff_rms_bits: AtomicU32,
     unaligned_diff_rms_bits: AtomicU32,
     lag_frames: AtomicI32,
+    loop_start: AtomicUsize,
+    loop_end: AtomicUsize,
 }
 
 /// Held for the duration of encode/decode/load so Output cannot change under PCM.
@@ -120,6 +124,8 @@ impl PlayerHandle {
             diff_rms_bits: AtomicU32::new(0.0f32.to_bits()),
             unaligned_diff_rms_bits: AtomicU32::new(0.0f32.to_bits()),
             lag_frames: AtomicI32::new(0),
+            loop_start: AtomicUsize::new(0),
+            loop_end: AtomicUsize::new(0),
         });
         let device_name = Arc::new(Mutex::new(None));
         let thread_shared = shared.clone();
@@ -163,6 +169,8 @@ impl PlayerHandle {
         self.shared
             .lag_frames
             .store(lag.lag_frames, Ordering::Release);
+        self.shared.loop_start.store(0, Ordering::Release);
+        self.shared.loop_end.store(0, Ordering::Release);
         self.tx
             .send(Command::RebuildStream)
             .map_err(|_| AppError::msg("audio engine is not running"))?;
@@ -199,6 +207,33 @@ impl PlayerHandle {
         self.shared
             .playhead
             .store(frame.min(frame_len.saturating_sub(1)), Ordering::Release);
+        Ok(())
+    }
+
+    /// Loop `[start, end)` in seconds. Pass `None` for either bound to clear.
+    pub fn set_loop(&self, start: Option<f64>, end: Option<f64>) -> AppResult<()> {
+        let rate = self.shared.sample_rate.load(Ordering::Acquire).max(1) as f64;
+        let frame_len = self
+            .shared
+            .buffers
+            .read()
+            .unwrap()
+            .as_ref()
+            .map(|b| b.frame_len)
+            .unwrap_or(0);
+        match (start, end) {
+            (Some(start), Some(end)) if end > start + 0.04 && frame_len > 1 => {
+                let start_frame =
+                    ((start.max(0.0) * rate) as usize).min(frame_len.saturating_sub(2));
+                let end_frame = ((end.max(0.0) * rate) as usize).clamp(start_frame + 1, frame_len);
+                self.shared.loop_start.store(start_frame, Ordering::Release);
+                self.shared.loop_end.store(end_frame, Ordering::Release);
+            }
+            _ => {
+                self.shared.loop_start.store(0, Ordering::Release);
+                self.shared.loop_end.store(0, Ordering::Release);
+            }
+        }
         Ok(())
     }
 
@@ -254,6 +289,9 @@ impl PlayerHandle {
         let unaligned_diff_rms =
             f32::from_bits(self.shared.unaligned_diff_rms_bits.load(Ordering::Acquire)) as f64;
         let lag_frames = self.shared.lag_frames.load(Ordering::Acquire);
+        let loop_start = self.shared.loop_start.load(Ordering::Acquire);
+        let loop_end = self.shared.loop_end.load(Ordering::Acquire);
+        let looping = loop_end > loop_start;
         PlayerStatus {
             playing: self.shared.playing.load(Ordering::Acquire),
             source: Source::from_index(self.shared.source.load(Ordering::Acquire)),
@@ -266,6 +304,8 @@ impl PlayerHandle {
             unaligned_diff_rms,
             lag_frames,
             lag_ms: f64::from(lag_frames) * 1000.0 / sample_rate as f64,
+            loop_start_seconds: looping.then_some(loop_start as f64 / sample_rate as f64),
+            loop_end_seconds: looping.then_some(loop_end as f64 / sample_rate as f64),
         }
     }
 }
@@ -460,7 +500,14 @@ fn write_frames<T: FromSample>(output: &mut [T], out_channels: usize, shared: &S
     }
 
     let frame_len = buffers.frame_len;
-    let mut pos = shared.playhead.load(Ordering::Acquire);
+    let loop_start = shared.loop_start.load(Ordering::Acquire);
+    let loop_end = shared.loop_end.load(Ordering::Acquire);
+    let mut pos = wrap_playhead(
+        shared.playhead.load(Ordering::Acquire),
+        frame_len,
+        loop_start,
+        loop_end,
+    );
     let mut playing = false;
 
     for frame in output.chunks_mut(out_channels.max(1)) {
@@ -479,9 +526,7 @@ fn write_frames<T: FromSample>(output: &mut [T], out_channels: usize, shared: &S
         } else {
             buffers.b.as_slice()
         };
-        if pos >= frame_len {
-            pos = 0;
-        }
+        pos = wrap_playhead(pos, frame_len, loop_start, loop_end);
         let idx = pos * CHANNELS;
         let (left, right) = if idx + 1 < data.len() {
             (data[idx], data[idx + 1])
@@ -503,10 +548,33 @@ fn write_frames<T: FromSample>(output: &mut [T], out_channels: usize, shared: &S
     }
 
     if playing {
-        shared
-            .playhead
-            .store(pos % frame_len.max(1), Ordering::Release);
+        shared.playhead.store(
+            wrap_playhead(pos, frame_len, loop_start, loop_end),
+            Ordering::Release,
+        );
     }
+}
+
+/// Wrap the playhead at the track end, or at `[loop_start, loop_end)` when looping.
+pub(crate) fn wrap_playhead(
+    pos: usize,
+    frame_len: usize,
+    loop_start: usize,
+    loop_end: usize,
+) -> usize {
+    if frame_len == 0 {
+        return 0;
+    }
+    if loop_end > loop_start && loop_end <= frame_len {
+        if pos >= loop_end {
+            return loop_start;
+        }
+        return pos;
+    }
+    if pos >= frame_len {
+        return 0;
+    }
+    pos
 }
 
 pub fn pcm_diff_rms(a: &[f32], b: &[f32]) -> f64 {
@@ -528,7 +596,7 @@ fn buffers_are_distinct(diff_rms: f64) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{buffers_are_distinct, pcm_diff_rms};
+    use super::{buffers_are_distinct, pcm_diff_rms, wrap_playhead};
 
     #[test]
     fn identical_buffers_are_rejected() {
@@ -543,6 +611,16 @@ mod tests {
         let diff = pcm_diff_rms(&a, &b);
         assert!(buffers_are_distinct(diff));
         assert!(diff > 0.1);
+    }
+
+    #[test]
+    fn wrap_playhead_loops_selected_region() {
+        assert_eq!(wrap_playhead(10, 100, 0, 0), 10);
+        assert_eq!(wrap_playhead(100, 100, 0, 0), 0);
+        assert_eq!(wrap_playhead(49, 100, 20, 50), 49);
+        assert_eq!(wrap_playhead(50, 100, 20, 50), 20);
+        assert_eq!(wrap_playhead(80, 100, 20, 50), 20);
+        assert_eq!(wrap_playhead(5, 100, 20, 50), 5);
     }
 }
 
