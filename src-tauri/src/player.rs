@@ -77,10 +77,22 @@ struct Shared {
     playhead: AtomicUsize,
     source: AtomicU8,
     playing: AtomicBool,
+    preparing: AtomicBool,
     sample_rate: AtomicU32,
     diff_rms_bits: AtomicU32,
     unaligned_diff_rms_bits: AtomicU32,
     lag_frames: AtomicI32,
+}
+
+/// Held for the duration of encode/decode/load so Output cannot change under PCM.
+pub struct PrepareGuard {
+    shared: Arc<Shared>,
+}
+
+impl Drop for PrepareGuard {
+    fn drop(&mut self) {
+        self.shared.preparing.store(false, Ordering::Release);
+    }
 }
 
 enum Command {
@@ -103,6 +115,7 @@ impl PlayerHandle {
             playhead: AtomicUsize::new(0),
             source: AtomicU8::new(0),
             playing: AtomicBool::new(false),
+            preparing: AtomicBool::new(false),
             sample_rate: AtomicU32::new(48_000),
             diff_rms_bits: AtomicU32::new(0.0f32.to_bits()),
             unaligned_diff_rms_bits: AtomicU32::new(0.0f32.to_bits()),
@@ -199,10 +212,26 @@ impl PlayerHandle {
     }
 
     pub fn set_device(&self, name: Option<String>) -> AppResult<()> {
-        *self.device_name.lock().unwrap() = name.clone();
+        let mut device_name = self.device_name.lock().unwrap();
+        if self.shared.preparing.load(Ordering::Acquire) {
+            return Err(AppError::msg(
+                "wait for prepare to finish before changing output",
+            ));
+        }
+        *device_name = name.clone();
+        drop(device_name);
         self.tx
             .send(Command::SetDevice(name))
             .map_err(|_| AppError::msg("audio engine is not running"))
+    }
+
+    /// Block Output changes until the returned guard is dropped (after PCM load).
+    pub fn lock_prepare(&self) -> PrepareGuard {
+        let _device = self.device_name.lock().unwrap();
+        self.shared.preparing.store(true, Ordering::Release);
+        PrepareGuard {
+            shared: self.shared.clone(),
+        }
     }
 
     pub fn selected_device(&self) -> Option<String> {

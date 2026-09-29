@@ -2,7 +2,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import changelog from "../CHANGELOG.md?raw";
 import { api } from "./api";
 import { bundledTipOrder, listeningGuide, tipForTrack } from "./listeningTips";
@@ -72,6 +72,34 @@ const DEFAULT_TRACK_ID = "bundled:jahzzar-missing-you";
 const DEFAULT_CODEC = "mp3";
 const DEFAULT_BITRATE = 32;
 
+/** Arrow-key seek after scrubbing: ~2% of the track, clamped to 1–10s. */
+function seekStepSeconds(duration: number): number {
+  if (!Number.isFinite(duration) || duration <= 0) {
+    return 5;
+  }
+  return Math.min(10, Math.max(1, duration * 0.02));
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  if (target.tagName === "SELECT" || target.tagName === "TEXTAREA") {
+    return true;
+  }
+  if (target.tagName !== "INPUT") {
+    return false;
+  }
+  // Timeline range keeps focus after a drag; arrow keys must still seek.
+  return (target as HTMLInputElement).type !== "range";
+}
+
+function yieldPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => resolve());
+  });
+}
+
 const FALLBACK_DEVICE: DeviceInfo = {
   name: "System default",
   isDefault: true,
@@ -129,6 +157,10 @@ export default function App() {
   const [progress, setProgress] = useState<PrepareProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [panel, setPanel] = useState<null | "about" | "tips">(null);
+  const positionRef = useRef(0);
+  const durationRef = useRef(0);
+  const ignorePollUntilRef = useRef(0);
+  const busyRef = useRef(false);
   const appVersion = useAppVersion();
 
   const tracks = useMemo(
@@ -215,6 +247,11 @@ export default function App() {
       try {
         const status = await api.playerStatus();
         if (!cancelled) {
+          if (performance.now() < ignorePollUntilRef.current) {
+            return;
+          }
+          positionRef.current = status.positionSeconds;
+          durationRef.current = status.durationSeconds;
           setPlayer(status);
         }
       } catch {
@@ -241,15 +278,20 @@ export default function App() {
   }, [selectedCodec, bitrate]);
 
   const changeDevice = async (name: string) => {
+    if (busyRef.current) {
+      return;
+    }
     setDeviceName(name);
     await api.setDevice(name);
     if (session && trackId) {
+      busyRef.current = true;
       setBusy(true);
       try {
         await api.prepareComparison(trackId, session.codec, session.bitrate);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       } finally {
+        busyRef.current = false;
         setBusy(false);
       }
     }
@@ -275,8 +317,11 @@ export default function App() {
       return;
     }
     setError(null);
+    setPanel(null);
+    busyRef.current = true;
     setBusy(true);
     setProgress({ stage: "start", message: "Preparing comparison…" });
+    await yieldPaint();
     try {
       await api.prepareComparison(trackId, codec, bitrate);
       const next = await api.startSession(trackId, codec, bitrate, mode, trialCount);
@@ -287,10 +332,25 @@ export default function App() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
+      busyRef.current = false;
       setBusy(false);
       setProgress(null);
     }
   };
+
+  const seekTo = useCallback(async (seconds: number) => {
+    const duration = durationRef.current;
+    const next =
+      duration > 0
+        ? Math.min(Math.max(0, seconds), duration)
+        : Math.max(0, seconds);
+    positionRef.current = next;
+    ignorePollUntilRef.current = performance.now() + 180;
+    setPlayer((current) =>
+      current ? { ...current, positionSeconds: next } : current,
+    );
+    await api.seek(next);
+  }, []);
 
   const switchSource = useCallback(async (source: "a" | "b" | "x") => {
     if (source === "x" && session?.mode !== "blind") {
@@ -338,6 +398,8 @@ export default function App() {
     await api.pause();
     setSession(null);
     setPlayer(null);
+    positionRef.current = 0;
+    durationRef.current = 0;
     setListenSource("a");
     setHistory(await api.listHistory());
   }, []);
@@ -360,8 +422,7 @@ export default function App() {
       if (!inSession || panel) {
         return;
       }
-      const target = event.target as HTMLElement | null;
-      if (target && ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName)) {
+      if (isEditableTarget(event.target)) {
         return;
       }
       const key = event.key.toLowerCase();
@@ -381,18 +442,21 @@ export default function App() {
       } else if (key === "tab") {
         event.preventDefault();
         cycleSource();
-      } else if (event.key === "ArrowLeft") {
-        void api.seek(Math.max(0, (player?.positionSeconds ?? 0) - 5));
-      } else if (event.key === "ArrowRight") {
-        void api.seek((player?.positionSeconds ?? 0) + 5);
+      } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        // preventDefault so a focused timeline range cannot apply its 0.01s
+        // native step (the post-scrub "barely moves" bug).
+        event.preventDefault();
+        const step = seekStepSeconds(durationRef.current);
+        const delta = event.key === "ArrowLeft" ? -step : step;
+        void seekTo(positionRef.current + delta);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [cycleSource, endSession, inSession, panel, player?.positionSeconds, submitVote, switchSource, togglePlay]);
+  }, [cycleSource, endSession, inSession, panel, seekTo, submitVote, switchSource, togglePlay]);
 
   return (
-    <div className="app">
+    <div className={`app${busy ? " is-preparing" : ""}`} aria-busy={busy}>
       <header className="topbar">
         <div className="brand-block">
           <div className="brand">
@@ -415,11 +479,19 @@ export default function App() {
             >
               {panel === "tips" ? "Home" : "Listening tips"}
             </button>
+            {!inSession && (
+              <StartListeningButton
+                disabled={!selectedTrack || (ffmpeg !== null && !ffmpeg.available)}
+                busy={busy}
+                onStart={() => void start()}
+              />
+            )}
           </div>
         </div>
         <DevicePicker
           devices={deviceOptions}
           value={deviceName || deviceOptions[0]?.name || ""}
+          disabled={busy}
           onChange={(name) => void changeDevice(name)}
         />
       </header>
@@ -470,14 +542,14 @@ export default function App() {
               label="Bundled"
               tracks={library.bundled}
               selectedId={trackId}
-              disabled={inSession}
+              disabled={inSession || busy}
               onSelect={setTrackId}
             />
             <TrackGroup
               label="Your files"
               tracks={library.user}
               selectedId={trackId}
-              disabled={inSession}
+              disabled={inSession || busy}
               onSelect={setTrackId}
             />
           </section>
@@ -513,12 +585,10 @@ export default function App() {
               trialCount={trialCount}
               busy={busy}
               progress={progress}
-              ffmpegReady={ffmpeg === null || Boolean(ffmpeg.available)}
               onCodec={setCodec}
               onBitrate={setBitrate}
               onMode={setMode}
               onTrials={setTrialCount}
-              onStart={() => void start()}
               onOpenTips={() => setPanel("tips")}
             />
           ) : (
@@ -529,7 +599,7 @@ export default function App() {
               codecs={codecOptions}
               onSource={(source) => void switchSource(source)}
               onPlay={() => void togglePlay()}
-              onSeek={(seconds) => void api.seek(seconds)}
+              onSeek={(seconds) => void seekTo(seconds)}
               onVote={(choice) => void submitVote(choice)}
               onEnd={() => void endSession()}
               onOpenTips={() => setPanel("tips")}
@@ -757,12 +827,10 @@ function Setup({
   trialCount,
   busy,
   progress,
-  ffmpegReady,
   onCodec,
   onBitrate,
   onMode,
   onTrials,
-  onStart,
   onOpenTips,
 }: {
   track: Track | null;
@@ -773,12 +841,10 @@ function Setup({
   trialCount: number;
   busy: boolean;
   progress: PrepareProgress | null;
-  ffmpegReady: boolean;
   onCodec: (id: string) => void;
   onBitrate: (rate: number) => void;
   onMode: (mode: SessionMode) => void;
   onTrials: (n: number) => void;
-  onStart: () => void;
   onOpenTips: () => void;
 }) {
   const selected = codecs.find((item) => item.id === codec);
@@ -802,12 +868,14 @@ function Setup({
         <ChoiceRow
           label="Codec"
           value={codec}
+          disabled={busy}
           options={codecs.map((item) => ({ value: item.id, label: item.label }))}
           onChange={onCodec}
         />
         <ChoiceRow
           label="Bitrate"
           value={String(bitrate)}
+          disabled={busy}
           options={(selected?.bitrates ?? []).map((rate) => ({
             value: String(rate),
             label: `${rate} kbps`,
@@ -817,6 +885,7 @@ function Setup({
         <ChoiceRow
           label="Mode"
           value={mode}
+          disabled={busy}
           options={[
             { value: "open", label: "Open A/B" },
             { value: "blind", label: "Blind ABX" },
@@ -826,21 +895,18 @@ function Setup({
         <ChoiceRow
           label="Trials"
           value={String(trialCount)}
-          disabled={mode === "open"}
+          disabled={busy || mode === "open"}
           options={[8, 12, 16, 24].map((n) => ({ value: String(n), label: String(n) }))}
           onChange={(value) => onTrials(Number(value))}
         />
       </div>
 
-      <button
-        type="button"
-        className="primary"
-        disabled={!track || busy || !ffmpegReady}
-        onClick={onStart}
-      >
-        {busy ? progress?.message ?? "Preparing…" : "Start listening"}
-      </button>
-      {busy && progress && <p className="hint">{progress.message}</p>}
+      {busy && (
+        <p className="prepare-status" role="status" aria-live="polite">
+          <span className="spinner" aria-hidden="true" />
+          {progress?.message ?? "Preparing comparison…"}
+        </p>
+      )}
     </div>
   );
 }
@@ -881,14 +947,22 @@ function ChoiceRow({
 function DevicePicker({
   devices,
   value,
+  disabled,
   onChange,
 }: {
   devices: DeviceInfo[];
   value: string;
+  disabled?: boolean;
   onChange: (name: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const current = devices.find((device) => device.name === value) ?? devices[0];
+
+  useEffect(() => {
+    if (disabled) {
+      setOpen(false);
+    }
+  }, [disabled]);
 
   useEffect(() => {
     if (!open) {
@@ -907,15 +981,21 @@ function DevicePicker({
   }, [open]);
 
   return (
-    <div className="device">
+    <div className={`device${disabled ? " is-disabled" : ""}`}>
       <span>Output</span>
       <div className="device-menu">
-        <button type="button" className="device-button" onClick={() => setOpen((v) => !v)}>
+        <button
+          type="button"
+          className="device-button"
+          disabled={disabled}
+          title={disabled ? "Wait for prepare to finish" : undefined}
+          onClick={() => setOpen((v) => !v)}
+        >
           {current
             ? `${current.name}${current.isDefault ? " (default)" : ""} · ${current.sampleRate} Hz`
             : "System default"}
         </button>
-        {open && (
+        {open && !disabled && (
           <ul className="device-list">
             {devices.map((device) => (
               <li key={device.name}>
@@ -1043,8 +1123,15 @@ function Player({
           min={0}
           max={Math.max(duration, 0.01)}
           step={0.01}
-          value={Math.min(position, duration)}
+          value={Math.min(position, duration || 0)}
+          aria-label="Playback position"
           onChange={(event) => onSeek(Number(event.target.value))}
+          onPointerUp={(event) => event.currentTarget.blur()}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+              event.preventDefault();
+            }
+          }}
         />
         <span className="clock">
           {formatTime(position)} / {formatTime(duration)}
@@ -1094,6 +1181,29 @@ function Player({
         </div>
       )}
     </div>
+  );
+}
+
+function StartListeningButton({
+  disabled,
+  busy,
+  onStart,
+}: {
+  disabled: boolean;
+  busy: boolean;
+  onStart: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`primary header-start${busy ? " is-busy" : ""}`}
+      disabled={disabled || busy}
+      onClick={onStart}
+      aria-busy={busy}
+    >
+      {busy && <span className="spinner" aria-hidden="true" />}
+      <span>{busy ? "Preparing…" : "Start listening"}</span>
+    </button>
   );
 }
 
