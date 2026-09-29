@@ -440,12 +440,16 @@ export default function App() {
       {error && <div className="banner error">{error}</div>}
 
       {panel === "about" ? (
-        <About version={appVersion} onOpenTips={() => setPanel("tips")} />
+        <div className="scroll-pane">
+          <About version={appVersion} onOpenTips={() => setPanel("tips")} />
+        </div>
       ) : panel === "tips" ? (
-        <ListeningTips
-          selectedId={selectedTrack?.id ?? trackId}
-          onHome={() => setPanel(null)}
-        />
+        <div className="scroll-pane">
+          <ListeningTips
+            selectedId={selectedTrack?.id ?? trackId}
+            onHome={() => setPanel(null)}
+          />
+        </div>
       ) : (
       <div className="layout">
         <aside className="sidebar">
