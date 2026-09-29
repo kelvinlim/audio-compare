@@ -123,6 +123,10 @@ fn run_prepare(
     codec: String,
     bitrate: u32,
 ) -> Result<PrepareInfo, String> {
+    // Prepare runs off the IPC thread, so Output would otherwise stay live.
+    // Hold this until after load() so a device change cannot decode at one
+    // rate and play at another.
+    let _prepare = player.lock_prepare();
     let track = library::find_track(&app, data_dir, &track_id)?;
     let ffmpeg_bin = ffmpeg::require_ffmpeg()?;
     let source = PathBuf::from(&track.path);

@@ -160,6 +160,7 @@ export default function App() {
   const positionRef = useRef(0);
   const durationRef = useRef(0);
   const ignorePollUntilRef = useRef(0);
+  const busyRef = useRef(false);
   const appVersion = useAppVersion();
 
   const tracks = useMemo(
@@ -277,15 +278,20 @@ export default function App() {
   }, [selectedCodec, bitrate]);
 
   const changeDevice = async (name: string) => {
+    if (busyRef.current) {
+      return;
+    }
     setDeviceName(name);
     await api.setDevice(name);
     if (session && trackId) {
+      busyRef.current = true;
       setBusy(true);
       try {
         await api.prepareComparison(trackId, session.codec, session.bitrate);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       } finally {
+        busyRef.current = false;
         setBusy(false);
       }
     }
@@ -312,6 +318,7 @@ export default function App() {
     }
     setError(null);
     setPanel(null);
+    busyRef.current = true;
     setBusy(true);
     setProgress({ stage: "start", message: "Preparing comparison…" });
     await yieldPaint();
@@ -325,6 +332,7 @@ export default function App() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
+      busyRef.current = false;
       setBusy(false);
       setProgress(null);
     }
@@ -483,6 +491,7 @@ export default function App() {
         <DevicePicker
           devices={deviceOptions}
           value={deviceName || deviceOptions[0]?.name || ""}
+          disabled={busy}
           onChange={(name) => void changeDevice(name)}
         />
       </header>
@@ -938,14 +947,22 @@ function ChoiceRow({
 function DevicePicker({
   devices,
   value,
+  disabled,
   onChange,
 }: {
   devices: DeviceInfo[];
   value: string;
+  disabled?: boolean;
   onChange: (name: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const current = devices.find((device) => device.name === value) ?? devices[0];
+
+  useEffect(() => {
+    if (disabled) {
+      setOpen(false);
+    }
+  }, [disabled]);
 
   useEffect(() => {
     if (!open) {
@@ -964,15 +981,21 @@ function DevicePicker({
   }, [open]);
 
   return (
-    <div className="device">
+    <div className={`device${disabled ? " is-disabled" : ""}`}>
       <span>Output</span>
       <div className="device-menu">
-        <button type="button" className="device-button" onClick={() => setOpen((v) => !v)}>
+        <button
+          type="button"
+          className="device-button"
+          disabled={disabled}
+          title={disabled ? "Wait for prepare to finish" : undefined}
+          onClick={() => setOpen((v) => !v)}
+        >
           {current
             ? `${current.name}${current.isDefault ? " (default)" : ""} · ${current.sampleRate} Hz`
             : "System default"}
         </button>
-        {open && (
+        {open && !disabled && (
           <ul className="device-list">
             {devices.map((device) => (
               <li key={device.name}>

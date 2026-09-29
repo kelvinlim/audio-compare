@@ -119,6 +119,14 @@ button {
   font-size: 0.86rem;
 }
 
+.device.is-disabled {
+  opacity: 0.45;
+}
+
+.device-button:disabled {
+  cursor: progress;
+}
+
 .device select,
 .field select,
 .transport input[type="range"] {
