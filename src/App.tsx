@@ -87,6 +87,12 @@ const FALLBACK_CODECS: CodecOption[] = [
 const DEFAULT_TRACK_ID = "bundled:jahzzar-missing-you";
 const DEFAULT_CODEC = "mp3";
 const DEFAULT_BITRATE = 32;
+const PREPARE_CANCELLED = "prepare was cancelled";
+
+function isPrepareCancelled(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.includes(PREPARE_CANCELLED);
+}
 
 /** Arrow-key seek after scrubbing: ~2% of the track, clamped to 1–10s. */
 function seekStepSeconds(duration: number): number {
@@ -306,15 +312,27 @@ export default function App() {
     setDeviceName(name);
     await api.setDevice(name);
     if (session && trackId) {
+      const restoreLoop = loop;
+      const gen = prepareGenRef.current;
       busyRef.current = true;
       setBusy(true);
       try {
         await api.prepareComparison(trackId, session.codec, session.bitrate);
+        if (gen !== prepareGenRef.current || !sessionRef.current) {
+          return;
+        }
+        if (restoreLoop) {
+          await api.setLoop(restoreLoop.start, restoreLoop.end);
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        if (gen === prepareGenRef.current && sessionRef.current && !isPrepareCancelled(err)) {
+          setError(err instanceof Error ? err.message : String(err));
+        }
       } finally {
-        busyRef.current = false;
-        setBusy(false);
+        if (gen === prepareGenRef.current) {
+          busyRef.current = false;
+          setBusy(false);
+        }
       }
     }
   };
@@ -374,11 +392,18 @@ export default function App() {
       stage: "start",
       message: nextTitle ? `Preparing ${nextTitle}…` : "Preparing comparison…",
     });
-    await clearLoop();
-    await yieldPaint();
     try {
+      await api.invalidatePrepare();
+      await clearLoop();
+      await yieldPaint();
+      if (gen !== prepareGenRef.current) {
+        return;
+      }
       if (sessionRef.current) {
         await api.pause();
+        if (gen !== prepareGenRef.current) {
+          return;
+        }
       }
       await api.prepareComparison(nextTrackId, codec, bitrate);
       if (gen !== prepareGenRef.current) {
@@ -392,10 +417,18 @@ export default function App() {
       setSession(next);
       setListenSource("a");
       await api.setSource("a");
+      if (gen !== prepareGenRef.current) {
+        await api.pause();
+        return;
+      }
       await api.play();
+      if (gen !== prepareGenRef.current) {
+        await api.pause();
+        return;
+      }
       setHistory(await api.listHistory());
     } catch (err) {
-      if (gen === prepareGenRef.current) {
+      if (gen === prepareGenRef.current && !isPrepareCancelled(err)) {
         setError(err instanceof Error ? err.message : String(err));
       }
     } finally {
@@ -491,6 +524,11 @@ export default function App() {
     setBusy(false);
     setProgress(null);
     setSwitchingTitle(null);
+    try {
+      await api.invalidatePrepare();
+    } catch {
+      // Tear the session down even if the engine call fails.
+    }
     await api.pause();
     await clearLoop();
     setSession(null);

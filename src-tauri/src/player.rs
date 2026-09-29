@@ -3,7 +3,9 @@ use crate::error::{AppError, AppResult};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Sample, SampleFormat, SizedSample, StreamConfig};
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicU8, AtomicUsize, Ordering};
+use std::sync::atomic::{
+    AtomicBool, AtomicI32, AtomicU32, AtomicU64, AtomicU8, AtomicUsize, Ordering,
+};
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -74,12 +76,16 @@ struct Buffers {
     frame_len: usize,
 }
 
+/// Returned when a superseded `prepare_comparison` tries to `load`.
+pub const PREPARE_CANCELLED: &str = "prepare was cancelled";
+
 struct Shared {
     buffers: RwLock<Option<Buffers>>,
     playhead: AtomicUsize,
     source: AtomicU8,
     playing: AtomicBool,
     preparing: AtomicBool,
+    load_generation: AtomicU64,
     sample_rate: AtomicU32,
     diff_rms_bits: AtomicU32,
     unaligned_diff_rms_bits: AtomicU32,
@@ -91,6 +97,13 @@ struct Shared {
 /// Held for the duration of encode/decode/load so Output cannot change under PCM.
 pub struct PrepareGuard {
     shared: Arc<Shared>,
+    generation: u64,
+}
+
+impl PrepareGuard {
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
 }
 
 impl Drop for PrepareGuard {
@@ -120,6 +133,7 @@ impl PlayerHandle {
             source: AtomicU8::new(0),
             playing: AtomicBool::new(false),
             preparing: AtomicBool::new(false),
+            load_generation: AtomicU64::new(0),
             sample_rate: AtomicU32::new(48_000),
             diff_rms_bits: AtomicU32::new(0.0f32.to_bits()),
             unaligned_diff_rms_bits: AtomicU32::new(0.0f32.to_bits()),
@@ -141,7 +155,14 @@ impl PlayerHandle {
         }
     }
 
-    pub fn load(&self, a: Vec<f32>, b: Vec<f32>, sample_rate: u32) -> AppResult<AlignmentInfo> {
+    pub fn load(
+        &self,
+        a: Vec<f32>,
+        b: Vec<f32>,
+        sample_rate: u32,
+        generation: u64,
+    ) -> AppResult<AlignmentInfo> {
+        self.ensure_prepare_current(generation)?;
         let unaligned = pcm_diff_rms(&a, &b);
         let (a, b, lag) = align::align_stereo_pair(a, b, sample_rate);
         let diff = pcm_diff_rms(&a, &b);
@@ -151,7 +172,9 @@ impl PlayerHandle {
             ));
         }
         let frame_len = a.len().min(b.len()) / CHANNELS;
-        *self.shared.buffers.write().unwrap() = Some(Buffers {
+        let mut buffers = self.shared.buffers.write().unwrap();
+        self.ensure_prepare_current(generation)?;
+        *buffers = Some(Buffers {
             a: Arc::new(a),
             b: Arc::new(b),
             frame_len,
@@ -171,6 +194,7 @@ impl PlayerHandle {
             .store(lag.lag_frames, Ordering::Release);
         self.shared.loop_start.store(0, Ordering::Release);
         self.shared.loop_end.store(0, Ordering::Release);
+        drop(buffers);
         self.tx
             .send(Command::RebuildStream)
             .map_err(|_| AppError::msg("audio engine is not running"))?;
@@ -181,6 +205,18 @@ impl PlayerHandle {
             lag_ms: lag.lag_ms,
             duration_seconds: frame_len as f64 / f64::from(sample_rate.max(1)),
         })
+    }
+
+    fn ensure_prepare_current(&self, generation: u64) -> AppResult<()> {
+        if self.shared.load_generation.load(Ordering::Acquire) != generation {
+            return Err(AppError::msg(PREPARE_CANCELLED));
+        }
+        Ok(())
+    }
+
+    /// Drop in-flight `load` so a cancelled prepare cannot replace current buffers.
+    pub fn invalidate_prepare(&self) {
+        self.shared.load_generation.fetch_add(1, Ordering::AcqRel);
     }
 
     pub fn play(&self) -> AppResult<()> {
@@ -264,8 +300,10 @@ impl PlayerHandle {
     pub fn lock_prepare(&self) -> PrepareGuard {
         let _device = self.device_name.lock().unwrap();
         self.shared.preparing.store(true, Ordering::Release);
+        let generation = self.shared.load_generation.fetch_add(1, Ordering::AcqRel) + 1;
         PrepareGuard {
             shared: self.shared.clone(),
+            generation,
         }
     }
 
@@ -621,6 +659,85 @@ mod tests {
         assert_eq!(wrap_playhead(50, 100, 20, 50), 20);
         assert_eq!(wrap_playhead(80, 100, 20, 50), 20);
         assert_eq!(wrap_playhead(5, 100, 20, 50), 5);
+    }
+
+    fn distinct_pair(seed: f32, frames: usize) -> (Vec<f32>, Vec<f32>) {
+        let mut a = vec![0.0; frames * 2];
+        let mut b = vec![0.0; frames * 2];
+        for i in 0..frames {
+            a[i * 2] = seed;
+            b[i * 2] = seed + 0.25;
+        }
+        (a, b)
+    }
+
+    #[test]
+    fn cancelled_prepare_cannot_overwrite_newer_buffers() {
+        let player = super::PlayerHandle::start();
+        let (a1, b1) = distinct_pair(0.1, 4_800);
+        let (a2, b2) = distinct_pair(0.4, 9_600);
+
+        let first = player.lock_prepare();
+        let first_gen = first.generation();
+        player
+            .load(a1.clone(), b1.clone(), 48_000, first_gen)
+            .expect("first load");
+        drop(first);
+
+        let second = player.lock_prepare();
+        let loaded = player
+            .load(a2, b2, 48_000, second.generation())
+            .expect("second load");
+        drop(second);
+
+        let stale = player.load(a1, b1, 48_000, first_gen);
+        assert!(stale.is_err(), "stale generation must not load");
+        let status = player.status();
+        assert!(
+            (status.duration_seconds - loaded.duration_seconds).abs() < 1e-6,
+            "stale load overwrote newer buffers"
+        );
+    }
+
+    #[test]
+    fn invalidate_prepare_rejects_in_flight_load() {
+        let player = super::PlayerHandle::start();
+        let (a, b) = distinct_pair(0.2, 4_800);
+        let guard = player.lock_prepare();
+        player.invalidate_prepare();
+        let err = player
+            .load(a, b, 48_000, guard.generation())
+            .expect_err("invalidated prepare must not load");
+        assert!(err.to_string().contains(super::PREPARE_CANCELLED));
+    }
+
+    #[test]
+    fn load_clears_loop_and_set_loop_restores_it() {
+        let player = super::PlayerHandle::start();
+        let (a, b) = distinct_pair(0.15, 48_000);
+        let guard = player.lock_prepare();
+        player
+            .load(a.clone(), b.clone(), 48_000, guard.generation())
+            .expect("load");
+        drop(guard);
+        player.set_loop(Some(0.1), Some(0.4)).expect("set loop");
+        let looping = player.status();
+        assert!(looping.loop_start_seconds.is_some());
+        assert!(looping.loop_end_seconds.is_some());
+
+        let reload = player.lock_prepare();
+        player
+            .load(a, b, 48_000, reload.generation())
+            .expect("reload");
+        drop(reload);
+        let cleared = player.status();
+        assert_eq!(cleared.loop_start_seconds, None);
+        assert_eq!(cleared.loop_end_seconds, None);
+
+        player.set_loop(Some(0.1), Some(0.4)).expect("restore loop");
+        let restored = player.status();
+        assert!(restored.loop_start_seconds.is_some());
+        assert!(restored.loop_end_seconds.is_some());
     }
 }
 

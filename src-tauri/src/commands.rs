@@ -128,7 +128,7 @@ fn run_prepare(
     // Prepare runs off the IPC thread, so Output would otherwise stay live.
     // Hold this until after load() so a device change cannot decode at one
     // rate and play at another.
-    let _prepare = player.lock_prepare();
+    let prepare = player.lock_prepare();
     let track = library::find_track(&app, data_dir, &track_id)?;
     let ffmpeg_bin = ffmpeg::require_ffmpeg()?;
     let source = PathBuf::from(&track.path);
@@ -157,7 +157,7 @@ fn run_prepare(
     }
 
     emit_progress(&app, "align", "Time-aligning A and B…");
-    let loaded = player.load(pcm_a, pcm_b, sample_rate)?;
+    let loaded = player.load(pcm_a, pcm_b, sample_rate, prepare.generation())?;
     emit_progress(&app, "ready", "Ready to listen");
 
     Ok(PrepareInfo {
@@ -170,6 +170,12 @@ fn run_prepare(
         lag_frames: loaded.lag_frames,
         lag_ms: loaded.lag_ms,
     })
+}
+
+#[tauri::command]
+pub fn invalidate_prepare(state: State<AppState>) -> Result<(), String> {
+    state.player.invalidate_prepare();
+    Ok(())
 }
 
 #[tauri::command]

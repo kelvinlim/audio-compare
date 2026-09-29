@@ -45,6 +45,7 @@ pub fn run() {
             commands::list_library,
             commands::import_track,
             commands::prepare_comparison,
+            commands::invalidate_prepare,
             commands::player_play,
             commands::player_pause,
             commands::player_seek,

@@ -7,6 +7,8 @@ export interface LoopRegion {
 }
 
 export const MIN_LOOP_SECONDS = 0.25;
+/** Pointer travel that counts as a drag rather than a seek click. */
+const DRAG_THRESHOLD_PX = 6;
 
 function formatTime(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) {
@@ -53,6 +55,7 @@ export function Timeline({
   const dragRef = useRef<{
     pointerId: number;
     originTime: number;
+    originX: number;
     moved: boolean;
   } | null>(null);
   const [draft, setDraft] = useState<LoopRegion | null>(null);
@@ -69,6 +72,7 @@ export function Timeline({
     dragRef.current = {
       pointerId: event.pointerId,
       originTime: time,
+      originX: event.clientX,
       moved: false,
     };
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -79,11 +83,11 @@ export function Timeline({
     if (!drag || drag.pointerId !== event.pointerId || duration <= 0) {
       return;
     }
-    const time = timeAtClientX(event.currentTarget, event.clientX, duration);
-    if (!drag.moved && Math.abs(time - drag.originTime) < MIN_LOOP_SECONDS) {
+    if (!drag.moved && Math.abs(event.clientX - drag.originX) < DRAG_THRESHOLD_PX) {
       return;
     }
     drag.moved = true;
+    const time = timeAtClientX(event.currentTarget, event.clientX, duration);
     const start = Math.min(drag.originTime, time);
     const end = Math.max(drag.originTime, time);
     setDraft({ start, end });
