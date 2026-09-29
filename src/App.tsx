@@ -406,14 +406,14 @@ export default function App() {
               className="ghost"
               onClick={() => setPanel((current) => (current === "about" ? null : "about"))}
             >
-              {panel === "about" ? "Back" : "About"}
+              {panel === "about" ? "Home" : "About"}
             </button>
             <button
               type="button"
               className="ghost"
               onClick={() => setPanel((current) => (current === "tips" ? null : "tips"))}
             >
-              {panel === "tips" ? "Back" : "Listening tips"}
+              {panel === "tips" ? "Home" : "Listening tips"}
             </button>
           </div>
         </div>
@@ -444,7 +444,7 @@ export default function App() {
       ) : panel === "tips" ? (
         <ListeningTips
           selectedId={selectedTrack?.id ?? trackId}
-          onBack={() => setPanel(null)}
+          onHome={() => setPanel(null)}
         />
       ) : (
       <div className="layout">
@@ -578,10 +578,10 @@ function About({
 
 function ListeningTips({
   selectedId,
-  onBack,
+  onHome,
 }: {
   selectedId: string;
-  onBack: () => void;
+  onHome: () => void;
 }) {
   const selectedKey = selectedId.startsWith("bundled:")
     ? selectedId.slice("bundled:".length)
@@ -626,8 +626,8 @@ function ListeningTips({
       })}
 
       <p className="hint">
-        <button type="button" className="link" onClick={onBack}>
-          Back to setup
+        <button type="button" className="link" onClick={onHome}>
+          Home
         </button>
       </p>
     </main>

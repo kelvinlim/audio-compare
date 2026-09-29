@@ -60,6 +60,10 @@ button {
   gap: 16px;
   padding: 18px 22px 12px;
   border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--bg);
 }
 
 .brand-block {
@@ -522,6 +526,7 @@ h3 {
   margin: 22px 0 0;
   padding: 4px 0 8px;
   border-top: 1px solid var(--line);
+  scroll-margin-top: 5.5rem;
 }
 
 .tip-block.selected-tip {
