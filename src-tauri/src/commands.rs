@@ -3,10 +3,10 @@ use crate::error::AppError;
 use crate::ffmpeg::{self, FfmpegStatus};
 use crate::history::{self, Session, SessionMode, SessionSummary};
 use crate::library::{self, Library, Track};
-use crate::player::{self, DeviceInfo, PlayerStatus, Source};
+use crate::player::{self, DeviceInfo, PlayerHandle, PlayerStatus, Source};
 use crate::AppState;
 use serde::Serialize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter, State};
 
 #[derive(Debug, Clone, Serialize)]
@@ -95,14 +95,35 @@ pub fn import_track(app: AppHandle, state: State<AppState>, path: String) -> Res
 }
 
 #[tauri::command]
-pub fn prepare_comparison(
+pub async fn prepare_comparison(
     app: AppHandle,
-    state: State<AppState>,
+    state: State<'_, AppState>,
     track_id: String,
     codec: String,
     bitrate: u32,
 ) -> Result<PrepareInfo, String> {
-    let track = library::find_track(&app, &state.data_dir, &track_id)?;
+    // Encode/decode is blocking work. Run it off the IPC thread so the webview
+    // can paint a spinner and receive `prepare-progress` events immediately.
+    let data_dir = state.data_dir.clone();
+    let cache_dir = state.cache_dir.clone();
+    let player = state.player.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        run_prepare(app, &data_dir, &cache_dir, &player, track_id, codec, bitrate)
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+fn run_prepare(
+    app: AppHandle,
+    data_dir: &Path,
+    cache_dir: &Path,
+    player: &PlayerHandle,
+    track_id: String,
+    codec: String,
+    bitrate: u32,
+) -> Result<PrepareInfo, String> {
+    let track = library::find_track(&app, data_dir, &track_id)?;
     let ffmpeg_bin = ffmpeg::require_ffmpeg()?;
     let source = PathBuf::from(&track.path);
     if !source.exists() {
@@ -111,7 +132,7 @@ pub fn prepare_comparison(
 
     emit_progress(&app, "hash", "Fingerprinting the lossless source…");
     let hash = file_sha256(&source)?;
-    let encoded_path = cached_encode_path(&state.cache_dir, &hash, &codec, bitrate);
+    let encoded_path = cached_encode_path(cache_dir, &hash, &codec, bitrate);
     let cached = encoded_path.exists();
 
     if !cached {
@@ -119,7 +140,7 @@ pub fn prepare_comparison(
         ffmpeg::encode_lossy(&ffmpeg_bin, &source, &encoded_path, &codec, bitrate)?;
     }
 
-    let sample_rate = player::device_sample_rate(state.player.selected_device().as_deref());
+    let sample_rate = player::device_sample_rate(player.selected_device().as_deref());
     emit_progress(&app, "decode-a", "Decoding lossless reference to PCM…");
     let pcm_a = ffmpeg::decode_pcm_f32(&ffmpeg_bin, &source, sample_rate)?;
     emit_progress(&app, "decode-b", "Decoding the lossy encode to PCM…");
@@ -130,7 +151,7 @@ pub fn prepare_comparison(
     }
 
     emit_progress(&app, "align", "Time-aligning A and B…");
-    let loaded = state.player.load(pcm_a, pcm_b, sample_rate)?;
+    let loaded = player.load(pcm_a, pcm_b, sample_rate)?;
     emit_progress(&app, "ready", "Ready to listen");
 
     Ok(PrepareInfo {
