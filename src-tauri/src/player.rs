@@ -593,6 +593,22 @@ fn write_frames<T: FromSample>(output: &mut [T], out_channels: usize, shared: &S
     }
 }
 
+/// After a reload that zeroed the playhead, resume inside an active loop.
+/// Positions already inside `[loop_start, loop_end)` are kept; anything else
+/// (outside the region, or unknown) starts at `loop_start`.
+pub(crate) fn resume_seconds_in_loop(
+    previous_seconds: Option<f64>,
+    loop_start: f64,
+    loop_end: f64,
+) -> f64 {
+    match previous_seconds {
+        Some(position) if position.is_finite() && position >= loop_start && position < loop_end => {
+            position
+        }
+        _ => loop_start,
+    }
+}
+
 /// Wrap the playhead at the track end, or at `[loop_start, loop_end)` when looping.
 pub(crate) fn wrap_playhead(
     pos: usize,
@@ -634,7 +650,7 @@ fn buffers_are_distinct(diff_rms: f64) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{buffers_are_distinct, pcm_diff_rms, wrap_playhead};
+    use super::{buffers_are_distinct, pcm_diff_rms, resume_seconds_in_loop, wrap_playhead};
 
     #[test]
     fn identical_buffers_are_rejected() {
@@ -738,6 +754,75 @@ mod tests {
         let restored = player.status();
         assert!(restored.loop_start_seconds.is_some());
         assert!(restored.loop_end_seconds.is_some());
+        assert!(
+            restored.position_seconds < 0.02,
+            "set_loop must not move the playhead; the UI seeks after restore"
+        );
+    }
+
+    #[test]
+    fn resume_seconds_in_loop_keeps_inside_and_snaps_outside() {
+        assert!((resume_seconds_in_loop(Some(0.35), 0.2, 0.6) - 0.35).abs() < 1e-12);
+        assert!((resume_seconds_in_loop(Some(0.2), 0.2, 0.6) - 0.2).abs() < 1e-12);
+        assert!((resume_seconds_in_loop(Some(0.05), 0.2, 0.6) - 0.2).abs() < 1e-12);
+        assert!((resume_seconds_in_loop(Some(0.6), 0.2, 0.6) - 0.2).abs() < 1e-12);
+        assert!((resume_seconds_in_loop(Some(0.9), 0.2, 0.6) - 0.2).abs() < 1e-12);
+        assert!((resume_seconds_in_loop(None, 0.2, 0.6) - 0.2).abs() < 1e-12);
+        assert!((resume_seconds_in_loop(Some(f64::NAN), 0.2, 0.6) - 0.2).abs() < 1e-12);
+    }
+
+    #[test]
+    fn reload_then_restore_loop_resumes_inside_region() {
+        let player = super::PlayerHandle::start();
+        let (a, b) = distinct_pair(0.15, 48_000);
+        let guard = player.lock_prepare();
+        player
+            .load(a.clone(), b.clone(), 48_000, guard.generation())
+            .expect("load");
+        drop(guard);
+        player.set_loop(Some(0.2), Some(0.6)).expect("set loop");
+        player.seek(0.35).expect("seek inside loop");
+        let previous = player.status().position_seconds;
+        assert!((previous - 0.35).abs() < 0.02);
+
+        let reload = player.lock_prepare();
+        player
+            .load(a, b, 48_000, reload.generation())
+            .expect("reload");
+        drop(reload);
+        let after_load = player.status();
+        assert!(after_load.position_seconds < 0.02, "load zeros playhead");
+        assert_eq!(after_load.loop_start_seconds, None);
+
+        player.set_loop(Some(0.2), Some(0.6)).expect("restore loop");
+        let after_set_loop = player.status();
+        assert!(
+            after_set_loop.position_seconds < 0.02,
+            "re-applying the loop leaves the playhead at 0"
+        );
+
+        let resume = resume_seconds_in_loop(Some(previous), 0.2, 0.6);
+        player.seek(resume).expect("seek into loop");
+        let restored = player.status();
+        assert!(
+            (restored.position_seconds - 0.35).abs() < 0.02,
+            "playhead should resume at the previous in-loop position"
+        );
+        assert!(restored.loop_start_seconds.is_some());
+        assert!(restored.loop_end_seconds.is_some());
+
+        let from_outside = resume_seconds_in_loop(Some(0.05), 0.2, 0.6);
+        player.seek(from_outside).expect("seek to loop start");
+        let snapped = player.status();
+        assert!(
+            (snapped.position_seconds - 0.2).abs() < 0.02,
+            "playhead outside the loop should resume at loop_start"
+        );
+        assert_eq!(
+            wrap_playhead(5, 100, 20, 50),
+            5,
+            "wrap still only fires at/after loop_end"
+        );
     }
 }
 

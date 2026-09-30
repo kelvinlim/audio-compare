@@ -35,6 +35,22 @@ export function formatLoopRange(loop: LoopRegion): string {
   return `${formatTime(loop.start)}–${formatTime(loop.end)}`;
 }
 
+/** Resume inside an active loop after a reload that zeroed the playhead. */
+export function resumePositionInLoop(
+  position: number | null | undefined,
+  loop: LoopRegion,
+): number {
+  if (
+    position != null &&
+    Number.isFinite(position) &&
+    position >= loop.start &&
+    position < loop.end
+  ) {
+    return position;
+  }
+  return loop.start;
+}
+
 export function Timeline({
   duration,
   position,
