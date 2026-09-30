@@ -67,7 +67,7 @@ The setup screen defaults to **Jahzzar — Missing You** vs **32 kbps MP3** in *
 | `[` `]` | Loop in / loop out at the playhead |
 | `L` | Clear the loop |
 
-Amber marks on the timeline are listening-tip cue regions. Click a cue time in the tip card (or drag across the timeline) to loop that slice; **Clear loop** or `L` turns looping off. Blind ABX trials in progress are abandoned if you switch tracks mid-session.
+Amber marks on the timeline are listening-tip cue regions; hover a mark to read that cue’s tip. Click a cue time in the tip card (or drag across the timeline) to loop that slice; **Clear loop** or `L` turns looping off. Blind ABX trials in progress are abandoned if you switch tracks mid-session.
 
 In blind mode the UI does not reveal whether X is A or B. A sounding like X on some trials is expected.
 

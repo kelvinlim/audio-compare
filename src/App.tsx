@@ -644,20 +644,30 @@ export default function App() {
             <span className="version">{appVersion ? `v${appVersion}` : ""}</span>
             <span className="badge">ABX</span>
           </div>
-          <div className="header-links">
+          <nav className="header-links" aria-label="App">
             <button
               type="button"
-              className="ghost"
-              onClick={() => setPanel((current) => (current === "about" ? null : "about"))}
+              className={panel === null ? "ghost is-current" : "ghost"}
+              aria-current={panel === null ? "page" : undefined}
+              onClick={() => setPanel(null)}
             >
-              {panel === "about" ? "Home" : "About"}
+              Home
             </button>
             <button
               type="button"
-              className="ghost"
-              onClick={() => setPanel((current) => (current === "tips" ? null : "tips"))}
+              className={panel === "about" ? "ghost is-current" : "ghost"}
+              aria-current={panel === "about" ? "page" : undefined}
+              onClick={() => setPanel("about")}
             >
-              {panel === "tips" ? "Home" : "Listening tips"}
+              About
+            </button>
+            <button
+              type="button"
+              className={panel === "tips" ? "ghost is-current" : "ghost"}
+              aria-current={panel === "tips" ? "page" : undefined}
+              onClick={() => setPanel("tips")}
+            >
+              Listening tips
             </button>
             {!inSession && (
               <StartListeningButton
@@ -666,7 +676,7 @@ export default function App() {
                 onStart={() => void start()}
               />
             )}
-          </div>
+          </nav>
         </div>
         <DevicePicker
           devices={deviceOptions}
@@ -716,9 +726,6 @@ export default function App() {
               Select a track here. Bundled diagnostics plus your own FLAC or WAV.
               {inSession ? " Click another track to restart with that source." : ""}
             </p>
-            <button type="button" className="link sidebar-link" onClick={() => setPanel("tips")}>
-              What to listen for
-            </button>
             <TrackGroup
               label="Bundled"
               tracks={library.bundled}
