@@ -14,7 +14,7 @@ Built with [Tauri 2](https://tauri.app/), React, and Rust. Playback is raw PCM t
 - **Instant A / B / X** — same playhead, no restart.
 - **Output device picker** — including system default.
 - **Bundled open-licensed tracks** plus import of your own FLAC/WAV (WAV plays as the lossless A source).
-- **Cue highlights and A–B loop** — tip regions mark the timeline; drag or `[` / `]` to loop a slice.
+- **Cue highlights and A–B loop** — tip regions mark the timeline; drag, Loop in/out, or double-click a cue to loop a slice.
 - **Encode cache** — a given source + codec + bitrate is encoded once.
 
 ### Codecs
@@ -67,7 +67,7 @@ The setup screen defaults to **Jahzzar — Missing You** vs **32 kbps MP3** in *
 | `[` `]` | Loop in / loop out at the playhead |
 | `L` | Clear the loop |
 
-Amber marks on the timeline are listening-tip cue regions; hover a mark to read that cue’s tip. Click a cue time in the tip card (or drag across the timeline) to loop that slice; **Clear loop** or `L` turns looping off. Blind ABX trials in progress are abandoned if you switch tracks mid-session.
+Amber marks on the timeline are listening-tip cue regions; hover a mark to read that cue’s tip. Click a cue time in the tip card, double-click a highlighted cue, or drag across the timeline to loop that slice. **Loop in** starts drawing the region from that mark to the playhead until **Loop out**. **Clear loop** or `L` turns looping off, including an in-progress Loop in. Blind ABX trials in progress are abandoned if you switch tracks mid-session.
 
 In blind mode the UI does not reveal whether X is A or B. A sounding like X on some trials is expected.
 

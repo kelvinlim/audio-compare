@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Show the loop region on the timeline as soon as Loop in is pressed (from the in-mark to the playhead, growing with playback) until Loop out
+- Double-click a highlighted tip cue region on the timeline to set that A–B loop
+
 ## 0.4.5 — 2026-09-30
 
 - Keep Home / About / Listening tips always visible; dim the active button instead of hiding it
