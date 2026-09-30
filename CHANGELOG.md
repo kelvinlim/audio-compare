@@ -1,10 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.4.5 — 2026-09-30
 
-- Keep Home, About, and Listening tips visible in the top nav; dim the active button instead of renaming it
-- Show a hover tooltip on highlighted listening-tip cue regions on the timeline
-- Drop the duplicate “What to listen for” link from the library sidebar (same destination as Listening tips)
+- Keep Home / About / Listening tips always visible; dim the active button instead of hiding it
+- Hover tooltips on highlighted tip cue regions
+- Remove duplicate “What to listen for” sidebar link (same destination as Listening tips); keep the compact per-track tip card on Setup/Player
 
 ## 0.4.4 — 2026-09-30
 
