@@ -35,6 +35,10 @@ export function formatLoopRange(loop: LoopRegion): string {
   return `${formatTime(loop.start)}–${formatTime(loop.end)}`;
 }
 
+function cueKey(cue: CueInterval): string {
+  return `${cue.range}-${cue.start}`;
+}
+
 /** Resume inside an active loop after a reload that zeroed the playhead. */
 export function resumePositionInLoop(
   position: number | null | undefined,
@@ -75,15 +79,20 @@ export function Timeline({
     moved: boolean;
   } | null>(null);
   const [draft, setDraft] = useState<LoopRegion | null>(null);
+  const [hoverKey, setHoverKey] = useState<string | null>(null);
 
   const safeDuration = duration > 0 ? duration : 0.01;
   const playhead = clamp(position, 0, safeDuration);
+  const hoverCue = hoverKey
+    ? (cues.find((cue) => cueKey(cue) === hoverKey) ?? null)
+    : null;
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (disabled || duration <= 0) {
       return;
     }
     event.preventDefault();
+    setHoverKey(null);
     const time = timeAtClientX(event.currentTarget, event.clientX, duration);
     dragRef.current = {
       pointerId: event.pointerId,
@@ -150,6 +159,7 @@ export function Timeline({
       onPointerCancel={() => {
         dragRef.current = null;
         setDraft(null);
+        setHoverKey(null);
       }}
     >
       <div className="timeline-track" />
@@ -163,10 +173,32 @@ export function Timeline({
             key={`${cue.range}-${cue.start}`}
             className={`timeline-cue${active ? " is-active" : ""}`}
             style={{ left: `${left}%`, width: `${Math.max(width, 0.6)}%` }}
-            title={`${cue.range} · ${cue.note}`}
+            onPointerEnter={() => {
+              if (!dragRef.current) {
+                setHoverKey(cueKey(cue));
+              }
+            }}
+            onPointerLeave={() => {
+              setHoverKey((current) => (current === cueKey(cue) ? null : current));
+            }}
           />
         );
       })}
+      {hoverCue && duration > 0 && (
+        <div
+          className="timeline-cue-tooltip"
+          role="tooltip"
+          style={{
+            left: `${Math.min(
+              92,
+              Math.max(8, ((hoverCue.start + hoverCue.end) / 2 / safeDuration) * 100),
+            )}%`,
+          }}
+        >
+          <span className="cue-range">{hoverCue.range}</span>
+          <span>{hoverCue.note}</span>
+        </div>
+      )}
       {duration > 0 && selection && (
         <div
           className={`timeline-loop${draft ? " is-draft" : ""}`}
