@@ -1028,7 +1028,7 @@ function TrackTipCard({
       </p>
       <p className="hint">
         {onCueClick
-          ? "Click a cue time to loop that region. Drag the timeline for a custom loop."
+          ? "Click a cue time or double-click a highlighted cue to loop that region. Drag the timeline for a custom loop."
           : tip.howToUse}
       </p>
     </aside>
@@ -1417,9 +1417,11 @@ function Player({
           position={position}
           cues={cues}
           loop={loop}
+          loopIn={loopIn}
           disabled={busy}
           onSeek={onSeek}
           onLoop={onLoop}
+          onLoopCue={onLoopCue}
         />
         <span className="clock">
           {formatTime(position)} / {formatTime(duration)}
@@ -1441,16 +1443,23 @@ function Player({
             <span>
               {loopIn != null
                 ? `Loop in ${formatTime(loopIn)} — press Loop out or ]`
-                : "Drag the timeline to loop, or click a cue time"}
+                : "Drag the timeline to loop, click a cue time, or double-click a highlighted cue"}
             </span>
-            <button
-              type="button"
-              className="ghost"
-              disabled={busy}
-              onClick={loopIn != null ? onLoopOut : onLoopIn}
-            >
-              {loopIn != null ? "Loop out" : "Loop in"}
-            </button>
+            <span className="loop-actions">
+              <button
+                type="button"
+                className="ghost"
+                disabled={busy}
+                onClick={loopIn != null ? onLoopOut : onLoopIn}
+              >
+                {loopIn != null ? "Loop out" : "Loop in"}
+              </button>
+              {loopIn != null && (
+                <button type="button" className="ghost" onClick={onClearLoop} disabled={busy}>
+                  Clear loop
+                </button>
+              )}
+            </span>
           </>
         )}
       </div>

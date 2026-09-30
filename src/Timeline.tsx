@@ -9,6 +9,10 @@ export interface LoopRegion {
 export const MIN_LOOP_SECONDS = 0.25;
 /** Pointer travel that counts as a drag rather than a seek click. */
 const DRAG_THRESHOLD_PX = 6;
+/** Second click on the same cue within this window sets that cue as the A–B loop. */
+const DOUBLE_CLICK_MS = 500;
+/** Visible width for a zero-length Loop-in preview so the overlay appears immediately. */
+const LOOP_IN_MIN_WIDTH_PX = 4;
 
 function formatTime(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) {
@@ -55,22 +59,47 @@ export function resumePositionInLoop(
   return loop.start;
 }
 
+/** Live A–B preview from Loop in to the playhead (order-independent). */
+export function loopPreviewRegion(
+  loopIn: number | null,
+  position: number,
+): LoopRegion | null {
+  if (loopIn == null || !Number.isFinite(loopIn) || !Number.isFinite(position)) {
+    return null;
+  }
+  return {
+    start: Math.min(loopIn, position),
+    end: Math.max(loopIn, position),
+  };
+}
+
+export function cueAtTime(cues: CueInterval[], time: number): CueInterval | null {
+  if (!Number.isFinite(time)) {
+    return null;
+  }
+  return cues.find((cue) => time >= cue.start && time < cue.end) ?? null;
+}
+
 export function Timeline({
   duration,
   position,
   cues,
   loop,
+  loopIn = null,
   disabled,
   onSeek,
   onLoop,
+  onLoopCue,
 }: {
   duration: number;
   position: number;
   cues: CueInterval[];
   loop: LoopRegion | null;
+  loopIn?: number | null;
   disabled?: boolean;
   onSeek: (seconds: number) => void;
   onLoop: (region: LoopRegion) => void;
+  onLoopCue?: (cue: CueInterval) => void;
 }) {
   const dragRef = useRef<{
     pointerId: number;
@@ -78,6 +107,8 @@ export function Timeline({
     originX: number;
     moved: boolean;
   } | null>(null);
+  const pendingCueClickRef = useRef<{ key: string; at: number } | null>(null);
+  const lastCueLoopAtRef = useRef(0);
   const [draft, setDraft] = useState<LoopRegion | null>(null);
   const [hoverKey, setHoverKey] = useState<string | null>(null);
 
@@ -86,6 +117,22 @@ export function Timeline({
   const hoverCue = hoverKey
     ? (cues.find((cue) => cueKey(cue) === hoverKey) ?? null)
     : null;
+  const preview = !draft && !loop ? loopPreviewRegion(loopIn, playhead) : null;
+  const selection = draft ?? loop ?? preview;
+  const defining = preview != null;
+
+  const applyCueLoop = (cue: CueInterval) => {
+    if (!onLoopCue) {
+      return;
+    }
+    const now = performance.now();
+    if (now - lastCueLoopAtRef.current < 80) {
+      return;
+    }
+    lastCueLoopAtRef.current = now;
+    pendingCueClickRef.current = null;
+    onLoopCue(cue);
+  };
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (disabled || duration <= 0) {
@@ -130,6 +177,7 @@ export function Timeline({
     }
     const time = timeAtClientX(event.currentTarget, event.clientX, duration);
     if (drag.moved) {
+      pendingCueClickRef.current = null;
       const start = Math.min(drag.originTime, time);
       const end = Math.max(drag.originTime, time);
       if (end - start >= MIN_LOOP_SECONDS) {
@@ -137,10 +185,25 @@ export function Timeline({
       }
       return;
     }
+    // Native dblclick is unreliable here: pointerdown calls preventDefault so
+    // the track can capture a drag. Treat a second click on the same cue as
+    // loop-that-region; a single click still seeks.
+    const cue = onLoopCue ? cueAtTime(cues, drag.originTime) : null;
+    const now = performance.now();
+    const pending = pendingCueClickRef.current;
+    if (
+      cue &&
+      pending &&
+      pending.key === cueKey(cue) &&
+      now - pending.at <= DOUBLE_CLICK_MS
+    ) {
+      pendingCueClickRef.current = null;
+      applyCueLoop(cue);
+      return;
+    }
+    pendingCueClickRef.current = cue ? { key: cueKey(cue), at: now } : null;
     onSeek(drag.originTime);
   };
-
-  const selection = draft ?? loop;
 
   return (
     <div
@@ -158,6 +221,7 @@ export function Timeline({
       onPointerUp={finishDrag}
       onPointerCancel={() => {
         dragRef.current = null;
+        pendingCueClickRef.current = null;
         setDraft(null);
         setHoverKey(null);
       }}
@@ -181,6 +245,14 @@ export function Timeline({
             onPointerLeave={() => {
               setHoverKey((current) => (current === cueKey(cue) ? null : current));
             }}
+            onDoubleClick={
+              onLoopCue
+                ? (event) => {
+                    event.stopPropagation();
+                    applyCueLoop(cue);
+                  }
+                : undefined
+            }
           />
         );
       })}
@@ -197,16 +269,29 @@ export function Timeline({
         >
           <span className="cue-range">{hoverCue.range}</span>
           <span>{hoverCue.note}</span>
+          {onLoopCue && <span className="cue-hint">Double-click to loop</span>}
         </div>
+      )}
+      {duration > 0 && loopIn != null && !loop && !draft && (
+        <div
+          className="timeline-loop-in"
+          style={{ left: `${(clamp(loopIn, 0, safeDuration) / safeDuration) * 100}%` }}
+          title={`Loop in ${formatTime(loopIn)}`}
+        />
       )}
       {duration > 0 && selection && (
         <div
-          className={`timeline-loop${draft ? " is-draft" : ""}`}
+          className={`timeline-loop${draft ? " is-draft" : ""}${defining ? " is-defining" : ""}`}
           style={{
             left: `${(selection.start / safeDuration) * 100}%`,
             width: `${((selection.end - selection.start) / safeDuration) * 100}%`,
+            minWidth: defining ? LOOP_IN_MIN_WIDTH_PX : undefined,
           }}
-          title={`Loop ${formatLoopRange(selection)}`}
+          title={
+            defining && loopIn != null
+              ? `Loop in ${formatTime(loopIn)}`
+              : `Loop ${formatLoopRange(selection)}`
+          }
         />
       )}
       <div
