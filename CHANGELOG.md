@@ -1,9 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.4.6 — 2026-09-30
 
-- Show the loop region on the timeline as soon as Loop in is pressed (from the in-mark to the playhead, growing with playback) until Loop out
-- Double-click a highlighted tip cue region on the timeline to set that A–B loop
+- Live loop region on timeline as soon as Loop in (#33)
+- Double-click tip cue region to set A–B loop (#34)
 
 ## 0.4.5 — 2026-09-30
 
