@@ -1,7 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.4.4 — 2026-09-30
 
+- Keep track selection in the sidebar Library list (no extra chip grid on Setup)
+- Pin the top nav while scrolling Listening tips and About; rename Back to Home
+- Move Start listening into the header; fix arrow-key seek after timeline scrub; show a spinner while encode/PCM prepare runs
 - Switching library tracks (or Import) during a session restarts listening with that source
 - Highlight listening-tip cue regions on the player timeline
 - Loop a selected region: drag the timeline, click a cue time, or use `[` / `]` (L clears)
