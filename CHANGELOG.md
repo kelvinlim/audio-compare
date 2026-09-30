@@ -6,6 +6,7 @@
 - Highlight listening-tip cue regions on the player timeline
 - Loop a selected region: drag the timeline, click a cue time, or use `[` / `]` (L clears)
 - Play imported WAV files as the lossless A source, same path as FLAC
+- After an output-device change, resume an active A–B loop from the previous playhead (or loop start) instead of the track start
 
 ## 0.4.3 — 2026-09-24
 

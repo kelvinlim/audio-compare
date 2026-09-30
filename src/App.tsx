@@ -7,7 +7,13 @@ import changelog from "../CHANGELOG.md?raw";
 import { api } from "./api";
 import { bundledTipOrder, cueIntervals, listeningGuide, parseCueRange, tipForTrack } from "./listeningTips";
 import type { CueInterval } from "./listeningTips";
-import { formatLoopRange, MIN_LOOP_SECONDS, Timeline, type LoopRegion } from "./Timeline";
+import {
+  formatLoopRange,
+  MIN_LOOP_SECONDS,
+  resumePositionInLoop,
+  Timeline,
+  type LoopRegion,
+} from "./Timeline";
 import type {
   CodecOption,
   DeviceInfo,
@@ -305,38 +311,6 @@ export default function App() {
     }
   }, [selectedCodec, bitrate]);
 
-  const changeDevice = async (name: string) => {
-    if (busyRef.current) {
-      return;
-    }
-    setDeviceName(name);
-    await api.setDevice(name);
-    if (session && trackId) {
-      const restoreLoop = loop;
-      const gen = prepareGenRef.current;
-      busyRef.current = true;
-      setBusy(true);
-      try {
-        await api.prepareComparison(trackId, session.codec, session.bitrate);
-        if (gen !== prepareGenRef.current || !sessionRef.current) {
-          return;
-        }
-        if (restoreLoop) {
-          await api.setLoop(restoreLoop.start, restoreLoop.end);
-        }
-      } catch (err) {
-        if (gen === prepareGenRef.current && sessionRef.current && !isPrepareCancelled(err)) {
-          setError(err instanceof Error ? err.message : String(err));
-        }
-      } finally {
-        if (gen === prepareGenRef.current) {
-          busyRef.current = false;
-          setBusy(false);
-        }
-      }
-    }
-  };
-
   const seekTo = useCallback(async (seconds: number) => {
     const duration = durationRef.current;
     const next =
@@ -350,6 +324,41 @@ export default function App() {
     );
     await api.seek(next);
   }, []);
+
+  const changeDevice = async (name: string) => {
+    if (busyRef.current) {
+      return;
+    }
+    setDeviceName(name);
+    await api.setDevice(name);
+    if (session && trackId) {
+      const restoreLoop = loop;
+      const restorePosition = positionRef.current;
+      const gen = prepareGenRef.current;
+      busyRef.current = true;
+      setBusy(true);
+      try {
+        await api.prepareComparison(trackId, session.codec, session.bitrate);
+        if (gen !== prepareGenRef.current || !sessionRef.current) {
+          return;
+        }
+        if (restoreLoop) {
+          await api.setLoop(restoreLoop.start, restoreLoop.end);
+          // load() zeros the playhead; wrap only fires at/after loop_end.
+          await seekTo(resumePositionInLoop(restorePosition, restoreLoop));
+        }
+      } catch (err) {
+        if (gen === prepareGenRef.current && sessionRef.current && !isPrepareCancelled(err)) {
+          setError(err instanceof Error ? err.message : String(err));
+        }
+      } finally {
+        if (gen === prepareGenRef.current) {
+          busyRef.current = false;
+          setBusy(false);
+        }
+      }
+    }
+  };
 
   const clearLoop = useCallback(async () => {
     setLoop(null);
