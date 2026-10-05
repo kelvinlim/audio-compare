@@ -645,6 +645,13 @@ export default function App() {
             <span className="badge">ABX</span>
           </div>
           <nav className="header-links" aria-label="App">
+            <SessionToggle
+              inSession={inSession}
+              busy={busy}
+              startDisabled={!selectedTrack || (ffmpeg !== null && !ffmpeg.available)}
+              onStart={() => void start()}
+              onEnd={() => void endSession()}
+            />
             <button
               type="button"
               className={panel === null ? "ghost is-current" : "ghost"}
@@ -655,27 +662,20 @@ export default function App() {
             </button>
             <button
               type="button"
-              className={panel === "about" ? "ghost is-current" : "ghost"}
-              aria-current={panel === "about" ? "page" : undefined}
-              onClick={() => setPanel("about")}
-            >
-              About
-            </button>
-            <button
-              type="button"
               className={panel === "tips" ? "ghost is-current" : "ghost"}
               aria-current={panel === "tips" ? "page" : undefined}
               onClick={() => setPanel("tips")}
             >
               Listening tips
             </button>
-            {!inSession && (
-              <StartListeningButton
-                disabled={!selectedTrack || (ffmpeg !== null && !ffmpeg.available)}
-                busy={busy}
-                onStart={() => void start()}
-              />
-            )}
+            <button
+              type="button"
+              className={panel === "about" ? "ghost is-current" : "ghost"}
+              aria-current={panel === "about" ? "page" : undefined}
+              onClick={() => setPanel("about")}
+            >
+              About
+            </button>
           </nav>
         </div>
         <DevicePicker
@@ -821,7 +821,6 @@ export default function App() {
               }}
               onClearLoop={() => void clearLoop()}
               onVote={(choice) => void submitVote(choice)}
-              onEnd={() => void endSession()}
               onOpenTips={() => setPanel("tips")}
             />
           )}
@@ -1299,7 +1298,6 @@ function Player({
   onLoopOut,
   onClearLoop,
   onVote,
-  onEnd,
   onOpenTips,
 }: {
   session: Session;
@@ -1322,7 +1320,6 @@ function Player({
   onLoopOut: () => void;
   onClearLoop: () => void;
   onVote: (choice: "a" | "b") => void;
-  onEnd: () => void;
   onOpenTips: () => void;
 }) {
   const duration = player?.durationSeconds ?? 0;
@@ -1348,9 +1345,6 @@ function Player({
             </p>
           )}
         </div>
-        <button type="button" className="ghost" onClick={onEnd} disabled={busy}>
-          End session
-        </button>
       </div>
 
       <div className="pads">
@@ -1515,25 +1509,37 @@ function Player({
   );
 }
 
-function StartListeningButton({
-  disabled,
+function SessionToggle({
+  inSession,
   busy,
+  startDisabled,
   onStart,
+  onEnd,
 }: {
-  disabled: boolean;
+  inSession: boolean;
   busy: boolean;
+  startDisabled: boolean;
   onStart: () => void;
+  onEnd: () => void;
 }) {
+  const preparing = busy;
+  const ending = inSession && !busy;
+  const label = preparing ? "Preparing" : ending ? "End session" : "Start listening";
+  const disabled = preparing || (!inSession && startDisabled);
   return (
     <button
       type="button"
-      className={`primary header-start${busy ? " is-busy" : ""}`}
-      disabled={disabled || busy}
-      onClick={onStart}
-      aria-busy={busy}
+      className={
+        ending
+          ? "ghost header-start"
+          : `primary header-start${preparing ? " is-busy" : ""}`
+      }
+      disabled={disabled}
+      onClick={ending ? onEnd : onStart}
+      aria-busy={preparing}
     >
-      {busy && <span className="spinner" aria-hidden="true" />}
-      <span>{busy ? "Preparing…" : "Start listening"}</span>
+      {preparing && <span className="spinner" aria-hidden="true" />}
+      <span>{label}</span>
     </button>
   );
 }
