@@ -182,6 +182,7 @@ export default function App() {
   const [player, setPlayer] = useState<PlayerStatus | null>(null);
   const [listenSource, setListenSource] = useState<"a" | "b" | "x">("a");
   const [busy, setBusy] = useState(false);
+  const [ending, setEnding] = useState(false);
   const [progress, setProgress] = useState<PrepareProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [panel, setPanel] = useState<null | "about" | "tips">(null);
@@ -192,6 +193,7 @@ export default function App() {
   const durationRef = useRef(0);
   const ignorePollUntilRef = useRef(0);
   const busyRef = useRef(false);
+  const endingRef = useRef(false);
   const sessionRef = useRef<Session | null>(null);
   const prepareGenRef = useRef(0);
   const appVersion = useAppVersion();
@@ -386,6 +388,9 @@ export default function App() {
   );
 
   const beginListening = async (nextTrackId: string) => {
+    if (endingRef.current) {
+      return;
+    }
     if (!nextTrackId) {
       setError("Pick a track first.");
       return;
@@ -528,24 +533,34 @@ export default function App() {
   }, [session]);
 
   const endSession = useCallback(async () => {
+    if (endingRef.current) {
+      return;
+    }
+    endingRef.current = true;
+    setEnding(true);
     prepareGenRef.current += 1;
     busyRef.current = false;
     setBusy(false);
     setProgress(null);
     setSwitchingTitle(null);
     try {
-      await api.invalidatePrepare();
-    } catch {
-      // Tear the session down even if the engine call fails.
+      try {
+        await api.invalidatePrepare();
+      } catch {
+        // Tear the session down even if the engine call fails.
+      }
+      await api.pause();
+      await clearLoop();
+      setSession(null);
+      setPlayer(null);
+      positionRef.current = 0;
+      durationRef.current = 0;
+      setListenSource("a");
+      setHistory(await api.listHistory());
+    } finally {
+      endingRef.current = false;
+      setEnding(false);
     }
-    await api.pause();
-    await clearLoop();
-    setSession(null);
-    setPlayer(null);
-    positionRef.current = 0;
-    durationRef.current = 0;
-    setListenSource("a");
-    setHistory(await api.listHistory());
   }, [clearLoop]);
 
   useEffect(() => {
@@ -648,6 +663,7 @@ export default function App() {
             <SessionToggle
               inSession={inSession}
               busy={busy}
+              ending={ending}
               startDisabled={!selectedTrack || (ffmpeg !== null && !ffmpeg.available)}
               onStart={() => void start()}
               onEnd={() => void endSession()}
@@ -1512,30 +1528,32 @@ function Player({
 function SessionToggle({
   inSession,
   busy,
+  ending,
   startDisabled,
   onStart,
   onEnd,
 }: {
   inSession: boolean;
   busy: boolean;
+  ending: boolean;
   startDisabled: boolean;
   onStart: () => void;
   onEnd: () => void;
 }) {
   const preparing = busy;
-  const ending = inSession && !busy;
-  const label = preparing ? "Preparing" : ending ? "End session" : "Start listening";
-  const disabled = preparing || (!inSession && startDisabled);
+  const showEnd = ending || (inSession && !busy);
+  const label = preparing ? "Preparing" : showEnd ? "End session" : "Start listening";
+  const disabled = preparing || ending || (!inSession && startDisabled);
   return (
     <button
       type="button"
       className={
-        ending
+        showEnd
           ? "ghost header-start"
           : `primary header-start${preparing ? " is-busy" : ""}`
       }
       disabled={disabled}
-      onClick={ending ? onEnd : onStart}
+      onClick={showEnd ? onEnd : onStart}
       aria-busy={preparing}
     >
       {preparing && <span className="spinner" aria-hidden="true" />}
