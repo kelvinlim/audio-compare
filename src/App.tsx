@@ -182,6 +182,7 @@ export default function App() {
   const [player, setPlayer] = useState<PlayerStatus | null>(null);
   const [listenSource, setListenSource] = useState<"a" | "b" | "x">("a");
   const [busy, setBusy] = useState(false);
+  const [ending, setEnding] = useState(false);
   const [progress, setProgress] = useState<PrepareProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [panel, setPanel] = useState<null | "about" | "tips">(null);
@@ -192,6 +193,7 @@ export default function App() {
   const durationRef = useRef(0);
   const ignorePollUntilRef = useRef(0);
   const busyRef = useRef(false);
+  const endingRef = useRef(false);
   const sessionRef = useRef<Session | null>(null);
   const prepareGenRef = useRef(0);
   const appVersion = useAppVersion();
@@ -386,6 +388,9 @@ export default function App() {
   );
 
   const beginListening = async (nextTrackId: string) => {
+    if (endingRef.current) {
+      return;
+    }
     if (!nextTrackId) {
       setError("Pick a track first.");
       return;
@@ -528,24 +533,34 @@ export default function App() {
   }, [session]);
 
   const endSession = useCallback(async () => {
+    if (endingRef.current) {
+      return;
+    }
+    endingRef.current = true;
+    setEnding(true);
     prepareGenRef.current += 1;
     busyRef.current = false;
     setBusy(false);
     setProgress(null);
     setSwitchingTitle(null);
     try {
-      await api.invalidatePrepare();
-    } catch {
-      // Tear the session down even if the engine call fails.
+      try {
+        await api.invalidatePrepare();
+      } catch {
+        // Tear the session down even if the engine call fails.
+      }
+      await api.pause();
+      await clearLoop();
+      setSession(null);
+      setPlayer(null);
+      positionRef.current = 0;
+      durationRef.current = 0;
+      setListenSource("a");
+      setHistory(await api.listHistory());
+    } finally {
+      endingRef.current = false;
+      setEnding(false);
     }
-    await api.pause();
-    await clearLoop();
-    setSession(null);
-    setPlayer(null);
-    positionRef.current = 0;
-    durationRef.current = 0;
-    setListenSource("a");
-    setHistory(await api.listHistory());
   }, [clearLoop]);
 
   useEffect(() => {
@@ -645,6 +660,14 @@ export default function App() {
             <span className="badge">ABX</span>
           </div>
           <nav className="header-links" aria-label="App">
+            <SessionToggle
+              inSession={inSession}
+              busy={busy}
+              ending={ending}
+              startDisabled={!selectedTrack || (ffmpeg !== null && !ffmpeg.available)}
+              onStart={() => void start()}
+              onEnd={() => void endSession()}
+            />
             <button
               type="button"
               className={panel === null ? "ghost is-current" : "ghost"}
@@ -655,27 +678,20 @@ export default function App() {
             </button>
             <button
               type="button"
-              className={panel === "about" ? "ghost is-current" : "ghost"}
-              aria-current={panel === "about" ? "page" : undefined}
-              onClick={() => setPanel("about")}
-            >
-              About
-            </button>
-            <button
-              type="button"
               className={panel === "tips" ? "ghost is-current" : "ghost"}
               aria-current={panel === "tips" ? "page" : undefined}
               onClick={() => setPanel("tips")}
             >
               Listening tips
             </button>
-            {!inSession && (
-              <StartListeningButton
-                disabled={!selectedTrack || (ffmpeg !== null && !ffmpeg.available)}
-                busy={busy}
-                onStart={() => void start()}
-              />
-            )}
+            <button
+              type="button"
+              className={panel === "about" ? "ghost is-current" : "ghost"}
+              aria-current={panel === "about" ? "page" : undefined}
+              onClick={() => setPanel("about")}
+            >
+              About
+            </button>
           </nav>
         </div>
         <DevicePicker
@@ -821,7 +837,6 @@ export default function App() {
               }}
               onClearLoop={() => void clearLoop()}
               onVote={(choice) => void submitVote(choice)}
-              onEnd={() => void endSession()}
               onOpenTips={() => setPanel("tips")}
             />
           )}
@@ -1299,7 +1314,6 @@ function Player({
   onLoopOut,
   onClearLoop,
   onVote,
-  onEnd,
   onOpenTips,
 }: {
   session: Session;
@@ -1322,7 +1336,6 @@ function Player({
   onLoopOut: () => void;
   onClearLoop: () => void;
   onVote: (choice: "a" | "b") => void;
-  onEnd: () => void;
   onOpenTips: () => void;
 }) {
   const duration = player?.durationSeconds ?? 0;
@@ -1348,9 +1361,6 @@ function Player({
             </p>
           )}
         </div>
-        <button type="button" className="ghost" onClick={onEnd} disabled={busy}>
-          End session
-        </button>
       </div>
 
       <div className="pads">
@@ -1515,25 +1525,39 @@ function Player({
   );
 }
 
-function StartListeningButton({
-  disabled,
+function SessionToggle({
+  inSession,
   busy,
+  ending,
+  startDisabled,
   onStart,
+  onEnd,
 }: {
-  disabled: boolean;
+  inSession: boolean;
   busy: boolean;
+  ending: boolean;
+  startDisabled: boolean;
   onStart: () => void;
+  onEnd: () => void;
 }) {
+  const preparing = busy;
+  const showEnd = ending || (inSession && !busy);
+  const label = preparing ? "Preparing" : showEnd ? "End session" : "Start listening";
+  const disabled = preparing || ending || (!inSession && startDisabled);
   return (
     <button
       type="button"
-      className={`primary header-start${busy ? " is-busy" : ""}`}
-      disabled={disabled || busy}
-      onClick={onStart}
-      aria-busy={busy}
+      className={
+        showEnd
+          ? "ghost header-start"
+          : `primary header-start${preparing ? " is-busy" : ""}`
+      }
+      disabled={disabled}
+      onClick={showEnd ? onEnd : onStart}
+      aria-busy={preparing}
     >
-      {busy && <span className="spinner" aria-hidden="true" />}
-      <span>{busy ? "Preparing…" : "Start listening"}</span>
+      {preparing && <span className="spinner" aria-hidden="true" />}
+      <span>{label}</span>
     </button>
   );
 }
